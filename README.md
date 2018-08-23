@@ -10,7 +10,7 @@ look at [VR Network Lab](https://github.com/plajjan/vrnetlab) project.
 
 ### Create your own `Dockerfile`
 
-List of all avainble tags is [here](https://hub.docker.com/r/evilfreelancer/docker-routeros/tags/),
+List of all available tags is [here](https://hub.docker.com/r/evilfreelancer/docker-routeros/tags/),
 `latest` will be used by default.
 
 ```dockerfile
