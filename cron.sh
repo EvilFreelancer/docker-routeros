@@ -6,8 +6,16 @@ cd "$(dirname $0)"
 function getTarballs
 {
     curl https://mikrotik.com/download/archive -o - 2>/dev/null | \
+        grep -o '<a href=['"'"'"][^"'"'"']*['"'"'"]' | \
+        sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' | \
         grep -i vdi | \
-        awk -F\" '{print $2}' | \
+        sed 's:.*/::' | \
+        sort -V
+
+    curl https://mikrotik.com/download -o - 2>/dev/null | \
+        grep -o '<a href=['"'"'"][^"'"'"']*['"'"'"]' | \
+        sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' | \
+        grep -i vdi | \
         sed 's:.*/::' | \
         sort -V
 }
