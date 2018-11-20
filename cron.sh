@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Cron fix
 cd "$(dirname $0)"
