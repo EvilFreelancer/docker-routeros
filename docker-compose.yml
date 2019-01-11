@@ -15,16 +15,9 @@ services:
     image: evilfreelancer/docker-routeros:6.43.8
     restart: unless-stopped
     ports:
-      - "22223:23"
-      - "22222:22"
-      - "28728:8728"
-      - "28729:8729"
-
-  routeros-6-43-def:
-    image: evilfreelancer/docker-routeros:6.43.8
-    restart: unless-stopped
-    ports:
       - "2223:23"
       - "2222:22"
       - "8728:8728"
       - "8729:8729"
+      - "28728:8728"
+      - "28729:8729"
