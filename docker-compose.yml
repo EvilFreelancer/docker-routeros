@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+
+  routeros-6-42:
+    image: evilfreelancer/docker-routeros:6.42
+    restart: unless-stopped
+    ports:
+      - "12222:22"
+      - "12223:23"
+      - "18728:8728"
+      - "18729:8729"
+
+  routeros-6-43:
+    image: evilfreelancer/docker-routeros:6.43
+    restart: unless-stopped
+    ports:
+      - "22223:23"
+      - "22222:22"
+      - "28728:8728"
+      - "28729:8729"
