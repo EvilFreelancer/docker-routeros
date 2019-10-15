@@ -11,12 +11,13 @@ services:
       - "18728:8728"
       - "18729:8729"
 
-  routeros-6-44:
-    image: evilfreelancer/docker-routeros:6.44
+  routeros-6-45:
+    image: evilfreelancer/docker-routeros:6.45.6
     restart: unless-stopped
     ports:
       - "22222:22"
       - "22223:23"
+      - "7777:80"
       - "8728:8728"
       - "8729:8729"
       - "28728:8728"
