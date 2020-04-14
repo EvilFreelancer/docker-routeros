@@ -37,6 +37,11 @@ services:
   routeros-6-42:
     image: evilfreelancer/docker-routeros:6.42.12
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
     ports:
       - "12222:22"
       - "12223:23"
@@ -46,6 +51,11 @@ services:
   routeros-6-44:
     image: evilfreelancer/docker-routeros:6.44
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
     ports:
       - "22222:22"
       - "22223:23"
