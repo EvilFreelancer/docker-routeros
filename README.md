@@ -70,14 +70,14 @@ Now you can connect to your RouterOS container via VNC protocol
 
 ## List of exposed ports
 
-For access via VNC: 5900
+| Description | Ports |
+|-------------|-------|
+| Defaults    | 21, 22, 23, 80, 443, 8291, 8728, 8729 |
+| IPSec       | 50, 51, 500/udp, 4500/udp |
+| OpenVPN     | 1194/tcp, 1194/udp |
+| L2TP        | 1701 |
+| PPTP        | 1723 |
 
-Default ports of RouterOS: 21, 22, 23, 80, 443, 8291, 8728, 8729
+## Links
 
-IPSec: 50, 51, 500, 4500
-
-OpenVPN: 1194
-
-L2TP: 1701
-
-PPTP: 1723
+* https://github.com/ennweb/docker-kvm
