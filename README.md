@@ -90,4 +90,5 @@ Now you can connect to your RouterOS container via VNC protocol
 
 ## Links
 
+* https://github.com/joshkunz/qemu-docker
 * https://github.com/ennweb/docker-kvm
