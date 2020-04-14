@@ -49,7 +49,7 @@ services:
       - "18729:8729"
 
   routeros-6-44:
-    image: evilfreelancer/docker-routeros:6.44
+    image: evilfreelancer/docker-routeros:6.46.5
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
