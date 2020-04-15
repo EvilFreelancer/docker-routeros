@@ -9,7 +9,6 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun
-      - /dev/kvm
     ports:
       - "12222:22"
       - "12223:23"
@@ -18,12 +17,13 @@ services:
 
   routeros-6-45:
     image: evilfreelancer/docker-routeros:6.46.5
+    build:
+      context: .
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun
-      - /dev/kvm
     ports:
       - "22222:22"
       - "22223:23"

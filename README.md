@@ -41,7 +41,6 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun
-      - /dev/kvm
     ports:
       - "12222:22"
       - "12223:23"
@@ -55,7 +54,6 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun
-      - /dev/kvm
     ports:
       - "22222:22"
       - "22223:23"
