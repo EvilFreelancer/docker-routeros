@@ -16,7 +16,7 @@ services:
       - "18729:8729"
 
   routeros-6-47:
-    image: evilfreelancer/docker-routeros:6.47
+    image: evilfreelancer/docker-routeros:latest
     build:
       context: .
     restart: unless-stopped
