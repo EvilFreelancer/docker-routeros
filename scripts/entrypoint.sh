@@ -52,7 +52,7 @@ udhcpd -I $DUMMY_DHCPD_IP -f $DHCPD_CONF_FILE &
 exec qemu-system-x86_64 \
     -nographic -serial mon:stdio \
     -vnc 0.0.0.0:0 \
-    --m 512 \
+    -m 512 \
     -smp 4,sockets=1,cores=4,threads=1 \
     -nic tap,id=qemu0,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
     "$@" \
