@@ -17,8 +17,6 @@ services:
 
   routeros-6-47:
     image: evilfreelancer/docker-routeros:latest
-    build:
-      context: .
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
