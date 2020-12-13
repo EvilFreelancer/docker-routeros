@@ -3,11 +3,8 @@ FROM alpine:3.11
 # For access via VNC
 EXPOSE 5900
 
-# Default ports of RouterOS
-EXPOSE 21 22 23 80 443 8291 8728 8729
-
-# Different VPN services
-EXPOSE 50 51 500/udp 4500/udp 1194/tcp 1194/udp 1701 1723
+# Expose Ports of RouterOS
+EXPOSE 1194 1701 1723 1812/udp 1813/udp 21 22 23 443 4500/udp 50 500/udp 51 2021 2022 2023 2027 5900 80 8080 8291 8728 8729 8900
 
 # Change work dir (it will also create this folder if is not exist)
 WORKDIR /routeros
