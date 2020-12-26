@@ -93,18 +93,19 @@ prepare_intf $default_dev8 $QEMU_BRIDGE_ETH8
 # -serial mon:stdio: use "monitored stdio" as our serial output.
 # -nic: Use a TAP interface with our custom up/down scripts.
 # -drive: The VM image we're booting.
+# mac: Set up your own interfaces mac addresses here, cause from winbox you can not change these later.
 exec qemu-system-x86_64 \
    -nographic -serial mon:stdio \
    -vnc 0.0.0.0:0 \
    -m 512 \
    -smp 4,sockets=1,cores=4,threads=1 \
-   -nic tap,id=qemu1,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
-   -nic tap,id=qemu2,script=$QEMU_IFUP2,downscript=$QEMU_IFDOWN2 \
-   -nic tap,id=qemu3,script=$QEMU_IFUP3,downscript=$QEMU_IFDOWN3 \
-   -nic tap,id=qemu4,script=$QEMU_IFUP4,downscript=$QEMU_IFDOWN4 \
-   -nic tap,id=qemu5,script=$QEMU_IFUP5,downscript=$QEMU_IFDOWN5 \
-   -nic tap,id=qemu6,script=$QEMU_IFUP6,downscript=$QEMU_IFDOWN6 \
-   -nic tap,id=qemu7,script=$QEMU_IFUP7,downscript=$QEMU_IFDOWN7 \
-   -nic tap,id=qemu8,script=$QEMU_IFUP8,downscript=$QEMU_IFDOWN8 \
+   -nic tap,id=qemu1,mac=54:05:AB:CD:12:31,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
+   -nic tap,id=qemu2,mac=54:05:AB:CD:12:32,script=$QEMU_IFUP2,downscript=$QEMU_IFDOWN2 \
+   -nic tap,id=qemu3,mac=54:05:AB:CD:12:33,script=$QEMU_IFUP3,downscript=$QEMU_IFDOWN3 \
+   -nic tap,id=qemu4,mac=54:05:AB:CD:12:34,script=$QEMU_IFUP4,downscript=$QEMU_IFDOWN4 \
+   -nic tap,id=qemu5,mac=54:05:AB:CD:12:35,script=$QEMU_IFUP5,downscript=$QEMU_IFDOWN5 \
+   -nic tap,id=qemu6,mac=54:05:AB:CD:12:36,script=$QEMU_IFUP6,downscript=$QEMU_IFDOWN6 \
+   -nic tap,id=qemu7,mac=54:05:AB:CD:12:37,script=$QEMU_IFUP7,downscript=$QEMU_IFDOWN7 \
+   -nic tap,id=qemu8,mac=54:05:AB:CD:12:38,script=$QEMU_IFUP8,downscript=$QEMU_IFDOWN8 \
    "$@" \
    -hda $ROUTEROS_IMAGE
