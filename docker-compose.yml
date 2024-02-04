@@ -1,0 +1,54 @@
+version: "3"
+
+services:
+  routeros-6-48:
+    image: evilfreelancer/docker-routeros:6.48.4
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
+    ports:
+      - "12222:22"
+      - "12223:23"
+      - "18728:8728"
+      - "18729:8729"
+
+  routeros-latest:
+    image: evilfreelancer/docker-routeros:latest
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
+    ports:
+      - "22222:22"
+      - "22223:23"
+      - "7777:80"
+      - "8728:8728"
+      - "8729:8729"
+      - "28728:8728"
+      - "28729:8729"
+
+  routeros-local:
+    image: evilfreelancer/docker-routeros:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
+    ports:
+      - "22222:22"
+      - "22223:23"
+      - "7777:80"
+      - "8728:8728"
+      - "8729:8729"
+      - "28728:8728"
+      - "28729:8729"
+      - "5900:5900"
