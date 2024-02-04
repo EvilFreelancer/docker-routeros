@@ -36,11 +36,10 @@ getTarballs | while read line; do
 
     if [ "x$(checkTag "$tag")" == "x" ]
         then
-
             url="https://download.mikrotik.com/routeros/$tag/chr-$tag.vdi"
             if curl --output /dev/null --silent --head --fail "$url"; then
                 echo ">>> URL exists: $url"
-                sed -r "s/(ROUTEROS_VERSON=\")(.*)(\")/\1$tag\3/g" -i Dockerfile
+                sed -r "s/(ROUTEROS_VERSION=\")(.*)(\")/\1$tag\3/g" -i Dockerfile
                 git commit -m "Release of RouterOS changed to $tag" -a
                 git push
                 git tag "$tag"
