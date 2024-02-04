@@ -1,0 +1,36 @@
+name: "Tag master with new version of RouterOS when CI pass"
+
+on:
+  push:
+    branches:
+      - "master"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  call_test:
+    uses: EvilFreelancer/docker-routeros/.github/workflows/ci.yml@master
+
+  tag:
+    name: "Add a tag to git"
+    runs-on: "ubuntu-latest"
+    needs: call_test
+    if: always() && needs.call_test.result == 'success'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            fetch-depth: '0'
+
+      - name: Add new tag on git
+        run: |
+          NEW_TAG=$(grep 'ROUTEROS_VERSION="' Dockerfile |cut -d '"' -f 2)
+          git config user.name 'GitHub Actions'
+          git config user.email 'github-actions@users.noreply.github.com'
+          git tag "$NEW_TAG"
+
+      - name: Push new tag to git
+        if: ${{ !env.ACT }}
+        run: git push origin "$NEW_TAG"
