@@ -36,6 +36,20 @@ prepare_intf $default_dev1 $QEMU_BRIDGE_ETH1
 # Finally, start our DHCPD server
 udhcpd -I $DUMMY_DHCPD_IP -f $DHCPD_CONF_FILE &
 
+CPU_FEATURES=""
+KVM_OPTS=""
+if [ -e /dev/kvm ]; then
+   if grep -q -e vmx -e svm /proc/cpuinfo; then
+      echo "Enabling KVM"
+      CPU_FEATURES=",kvm=on"
+      KVM_OPTS="-machine accel=kvm -enable-kvm"
+   fi
+fi
+
+if [ "$CPU_FEATURES" = "" ]; then
+   echo "KVM not available, running in emulation mode. This will be slow."
+fi
+
 # And run the VM! A brief explanation of the options here:
 # -enable-kvm: Use KVM for this VM (much faster for our case).
 # -nographic: disable SDL graphics.
@@ -44,10 +58,12 @@ udhcpd -I $DUMMY_DHCPD_IP -f $DHCPD_CONF_FILE &
 # -drive: The VM image we're booting.
 # mac: Set up your own interfaces mac addresses here, cause from winbox you can not change these later.
 exec qemu-system-x86_64 \
-   -nographic -serial mon:stdio \
-   -vnc 0.0.0.0:0 \
+   -serial mon:stdio \
+   -nographic \
    -m 512 \
    -smp 4,sockets=1,cores=4,threads=1 \
+   -cpu host$CPU_FEATURES \
+   $KVM_OPTS \
    -nic tap,id=qemu1,mac=54:05:AB:CD:12:31,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
    "$@" \
    -hda $ROUTEROS_IMAGE
