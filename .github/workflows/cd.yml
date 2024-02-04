@@ -1,0 +1,34 @@
+name: "Build docker image and push to DockerHub when a tag is pushed"
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build:
+    name: "Build images"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Docker metadata from Git
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+            images: evilfreelancer/docker-routeros
+      - name: Login to DockerHub
+        if: ${{ !env.ACT }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build with Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ !env.ACT }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+  
