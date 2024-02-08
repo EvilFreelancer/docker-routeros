@@ -23,7 +23,7 @@ jobs:
       - name: Test with Docker
         run: |
             # start the container
-            docker-compose up --build -d routeros-local
+            docker-compose -f docker-compose.dist.yml up --build -d routeros-local
             # wait for the container to start
             sleep 5
             DOCKERID=$(docker ps  --format '{{.ID}}.{{.Names}}.{{.Image}}'|grep evilfreelancer/docker-routeros|cut -f 1 -d '.')
@@ -44,4 +44,4 @@ jobs:
             curl --retry 12 --retry-all-errors -k -u admin: http://127.0.0.1:7777/rest/system/resource | jq .platform |grep -i mikrotik
           
       - name: Stop container
-        run: docker-compose down
+        run: docker-compose -f docker-compose.dist.yml down
