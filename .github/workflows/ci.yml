@@ -1,0 +1,47 @@
+name: "Continuous Integration Tests"
+
+on: 
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  test:
+    name: "Build & Test images"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download docker-compose when using act
+        if: env.ACT
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+
+      - name: Test with Docker
+        run: |
+            # start the container
+            docker-compose -f docker-compose.dist.yml up --build -d routeros-local
+            # wait for the container to start
+            sleep 5
+            DOCKERID=$(docker ps  --format '{{.ID}}.{{.Names}}.{{.Image}}'|grep evilfreelancer/docker-routeros|cut -f 1 -d '.')
+            echo "Watching $DOCKERID for Mikrotik login..."
+            while true
+            do                
+                if docker logs "$DOCKERID" 2>&1|grep 'MikroTik'
+                then
+                    break
+                fi
+                echo "Not found yet, sleeping..."
+                sleep 5
+            done
+            # display logs
+            echo "Container logs:"
+            docker logs "$DOCKERID"
+            # download resource and check platform is Mikrotik
+            curl --retry 12 --retry-all-errors -k -u admin: http://127.0.0.1:7777/rest/system/resource | jq .platform |grep -i mikrotik
+          
+      - name: Stop container
+        run: docker-compose -f docker-compose.dist.yml down
