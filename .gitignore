@@ -1,3 +1,3 @@
 /.idea/
 /*.vdi
-/docker-compose.dist.yml
+/docker-compose.yml

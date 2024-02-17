@@ -1,5 +1,6 @@
-/.idea/
 /.git/
 /.gitignore
 /README.md
+/.idea/
+/*.vdi
 /docker-compose.yml
