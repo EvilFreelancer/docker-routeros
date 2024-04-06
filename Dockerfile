@@ -19,7 +19,7 @@ RUN set -xe \
 # Environments which may be change
 ENV ROUTEROS_VERSION="7.14.1"
 ENV ROUTEROS_IMAGE="chr-${ROUTEROS_VERSION}.vdi"
-ENV ROUTEROS_PATH="https://download.mikrotik.com/routeros/${ROUTEROS_VERSION}/${ROUTEROS_IMAGE}.zip"
+ENV ROUTEROS_PATH="https://cdn.mikrotik.com/routeros/${ROUTEROS_VERSION}/${ROUTEROS_IMAGE}.zip"
 
 # Download VDI image from remote site
 RUN wget "$ROUTEROS_PATH" -O "/routeros/${ROUTEROS_IMAGE}.zip" && \
