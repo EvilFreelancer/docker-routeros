@@ -38,7 +38,7 @@ jobs:
 
       - name: Create Pull Request
         if: ${{ steps.check_release.outputs.new == 'true' && !env.ACT }}
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           commit-message: "Update RouterOS version to ${{ steps.check_release.outputs.release }}"
           committer: "GitHub Actions<github-actions@users.noreply.github.com>"
