@@ -1,0 +1,69 @@
+name: Check for new RouterOS versions, build and push containers
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y curl jq
+
+      - name: Get latest RouterOS version
+        id: get_routeros_version
+        run: |
+          VERSION=$(
+            curl https://mikrotik.com/download/archive -o - 2>/dev/null | \
+            grep -o '<a href=['"'"'"][^"'"'"']*['"'"'"]' | \
+            sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' | \
+            grep -i c-stable | \
+            sed -r 's/\#c-stable-v//gi' | \
+            sed -r 's/_/\./gi' | \
+            sort -V | \
+            tail -n 1
+          )
+          
+          echo "Latest RouterOS version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get Docker Hub tags
+        id: docker_hub_tags
+        run: |
+          OWNER="evilfreelancer"
+          REPO="docker-routeros"
+          URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/"
+          TAGS=$(curl -s "$URL" | jq -r '.results[].name' | grep -v "latest")
+          echo "tags=$(echo $TAGS | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and test if new version
+        if: ${{ !contains(steps.docker_hub_tags.outputs.tags, steps.get_routeros_version.outputs.version) }}
+        run: |
+          VERSION="${{ steps.get_routeros_version.outputs.version }}"
+          OWNER="evilfreelancer"
+          REPO="docker-routeros"
+          
+          # Set up Docker Buildx
+          docker buildx create --use --name routeros_builder
+
+          # Build and push images
+          docker buildx build --push \
+            --platform linux/amd64 \
+            --tag $OWNER/$REPO:$VERSION \
+            --tag $OWNER/$REPO:latest \
+            --build-arg ROUTEROS_VERSION=$VERSION .
+
+      - name: Skip build
+        if: ${{ contains(steps.docker_hub_tags.outputs.tags, steps.get_routeros_version.outputs.version) }}
+        run: echo "Version ${{ steps.get_routeros_version.outputs.version }} already exists. Skipping build."
