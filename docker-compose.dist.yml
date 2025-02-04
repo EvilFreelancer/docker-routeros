@@ -2,7 +2,7 @@ version: "3"
 
 services:
   routeros-6-48:
-    image: jafarijason/docker-routeros:6.48.4
+    image: evilfreelancer/docker-routeros:6.48.4
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -16,7 +16,7 @@ services:
       - "18729:8729"
 
   routeros-latest:
-    image: jafarijason/docker-routeros:latest
+    image: evilfreelancer/docker-routeros:latest
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -33,7 +33,7 @@ services:
       - "28729:8729"
 
   routeros-local:
-    image: jafarijason/docker-routeros:latest
+    image: evilfreelancer/docker-routeros:latest
     build:
       context: .
       dockerfile: Dockerfile

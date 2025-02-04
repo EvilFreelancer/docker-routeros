@@ -35,7 +35,7 @@ jobs:
       - name: Get Docker Hub tags
         id: docker_hub_tags
         run: |
-          OWNER="jafarijason"
+          OWNER="evilfreelancer"
           REPO="docker-routeros"
           URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/"
           TAGS=$(curl -s "$URL" | jq -r '.results[].name' | grep -v "latest")
@@ -51,7 +51,7 @@ jobs:
         if: ${{ !contains(steps.docker_hub_tags.outputs.tags, steps.get_routeros_version.outputs.version) }}
         run: |
           VERSION="${{ steps.get_routeros_version.outputs.version }}"
-          OWNER="jafarijason"
+          OWNER="evilfreelancer"
           REPO="docker-routeros"
           
           # Set up Docker Buildx
