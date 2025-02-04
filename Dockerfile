@@ -9,6 +9,8 @@ EXPOSE 1194 1701 1723 1812/udp 1813/udp 21 22 23 443 4500/udp 50 500/udp 51 2021
 # Change work dir (it will also create this folder if is not exist)
 WORKDIR /routeros
 
+RUN mkdir -p  /routeros_source
+
 # Install dependencies
 RUN set -xe \
     && apk add --no-cache --update \
@@ -23,11 +25,11 @@ ENV ROUTEROS_IMAGE="chr-${ROUTEROS_VERSION}.vdi"
 ENV ROUTEROS_PATH="https://cdn.mikrotik.com/routeros/${ROUTEROS_VERSION}/${ROUTEROS_IMAGE}.zip"
 
 # Download VDI image from remote site
-RUN wget "$ROUTEROS_PATH" -O "/routeros/${ROUTEROS_IMAGE}.zip" && \
-    unzip "/routeros/${ROUTEROS_IMAGE}.zip" -d "/routeros" && \
-    rm -f "/routeros/${ROUTEROS_IMAGE}.zip"
+RUN wget "$ROUTEROS_PATH" -O "/routeros_source/${ROUTEROS_IMAGE}.zip" && \
+    unzip "/routeros_source/${ROUTEROS_IMAGE}.zip" -d "/routeros_source" && \
+    rm -f "/routeros_source/${ROUTEROS_IMAGE}.zip"
 
 # Copy script to routeros folder
-ADD ["./scripts", "/routeros"]
+ADD ["./scripts", "/routeros_source"]
 
-ENTRYPOINT ["/routeros/entrypoint.sh"]
+ENTRYPOINT ["/routeros_source/entrypoint.sh"]

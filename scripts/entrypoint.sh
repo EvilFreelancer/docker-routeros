@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+if [[ ! -e "/routeros/generate-dhcpd-conf.py" ]]; then
+
+   cp -r /routeros_source/. /routeros
+fi
+
+
+cd /routeros
+
 QEMU_BRIDGE_ETH1='qemubr1'
 default_dev1='eth0'
 
