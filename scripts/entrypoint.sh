@@ -6,6 +6,8 @@ if [[ ! -e "/routeros/generate-dhcpd-conf.py" ]]; then
 fi
 
 
+cd /routeros
+
 QEMU_BRIDGE_ETH1='qemubr1'
 default_dev1='eth0'
 
