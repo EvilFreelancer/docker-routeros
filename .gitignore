@@ -1,3 +1,4 @@
 /.idea/
 /*.vdi
 /docker-compose.yml
+build.txt
