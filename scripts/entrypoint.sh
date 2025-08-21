@@ -49,13 +49,14 @@ KVM_OPTS=""
 if [ -e /dev/kvm ]; then
    if grep -q -e vmx -e svm /proc/cpuinfo; then
       echo "Enabling KVM"
-      CPU_FEATURES=",kvm=on"
+      CPU_FEATURES="host,kvm=on"
       KVM_OPTS="-machine accel=kvm -enable-kvm"
    fi
 fi
 
 if [ "$CPU_FEATURES" = "" ]; then
    echo "KVM not available, running in emulation mode. This will be slow."
+   CPU_FEATURES="qemu64"
 fi
 
 # And run the VM! A brief explanation of the options here:
@@ -70,7 +71,7 @@ exec qemu-system-x86_64 \
    -nographic \
    -m 512 \
    -smp 4,sockets=1,cores=4,threads=1 \
-   -cpu host$CPU_FEATURES \
+   -cpu $CPU_FEATURES  \
    $KVM_OPTS \
    -nic tap,id=qemu1,mac=54:05:AB:CD:12:31,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
    "$@" \
