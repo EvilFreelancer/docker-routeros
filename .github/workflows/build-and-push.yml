@@ -59,7 +59,7 @@ jobs:
 
           # Build and push images
           docker buildx build --push \
-            --platform linux/amd64,linux/arm64,linux/arm/v7 \
+            --platform linux/amd64,linux/arm64 \
             --tag $OWNER/$REPO:$VERSION \
             --tag $OWNER/$REPO:latest \
             --build-arg ROUTEROS_VERSION=$VERSION .
