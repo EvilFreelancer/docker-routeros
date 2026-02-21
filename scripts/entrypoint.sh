@@ -32,7 +32,7 @@ fi
 
 QEMU_BRIDGE='qemubr1'
 ROUTEROS_DHCP_DNS="${ROUTEROS_DHCP_DNS:-8.8.8.8 8.8.4.4}"
-ROUTEROS_ETH0_PROMISC="${ROUTEROS_ETH0_PROMISC:-1}"
+ROUTEROS_ETH_PROMISC="${ROUTEROS_ETH_PROMISC:-1}"
 
 # When eth1 exists (container on two networks), use it for bridge so eth0 keeps IP for host port mapping.
 if ip link show eth1 &>/dev/null; then
@@ -57,7 +57,7 @@ function prepare_intf() {
    ip link set dev $1 master $2
    ip link set dev $1 up
    ip link set dev $2 up
-   if [ "$ROUTEROS_ETH0_PROMISC" = "1" ]; then
+   if [ "$ROUTEROS_ETH_PROMISC" = "1" ]; then
       ip link set dev $1 promisc on
    fi
 }

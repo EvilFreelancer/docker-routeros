@@ -176,7 +176,7 @@ networks:
 |----------|---------|-------------|
 | `ROUTEROS_NIC_MAC` | (generated) | MAC of the guest NIC on the bridge (TAP). At start the value is read from `ROUTEROS_DATA_DIR/nic_mac` if the file exists; otherwise the env is used if set, else a unique MAC is generated and written to that file so it persists per volume. Set this env only to override the stored or generated value. |
 | `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
-| `ROUTEROS_ETH0_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the bridge port (eth0 or eth1). Set to `0` to disable. |
+| `ROUTEROS_ETH_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the bridge port (eth0 or eth1). Set to `0` to disable. |
 | `ROUTEROS_DATA_DIR` | `/data` | Folder in the container exposed to the VM as a FAT disk (VVFAT). Mount a Docker volume here so files are visible in RouterOS and persist. See "FAT disk from host folder" below. |
 
 Example with custom DNS and MAC:
@@ -187,7 +187,7 @@ Example with custom DNS and MAC:
     environment:
       ROUTEROS_NIC_MAC: "54:05:AB:CD:12:31"
       ROUTEROS_DHCP_DNS: "1.1.1.1 1.0.0.1"
-      ROUTEROS_ETH0_PROMISC: "1"
+      ROUTEROS_ETH_PROMISC: "1"
 ```
 
 ## FAT disk from host folder
@@ -230,3 +230,4 @@ catering to various services and protocols used by RouterOS.
 * [VR Network Lab](https://github.com/vrnetlab/vrnetlab) - Run network equipment in Docker; alternative for production-like RouterOS.
 * [qemu-docker](https://github.com/joshkunz/qemu-docker) - QEMU in Docker.
 * [QEMU/KVM on Docker](https://github.com/ennweb/docker-kvm) - QEMU/KVM virtualization in Docker.
+* [tenable/routeros](https://github.com/tenable/routeros) - RouterOS security research tooling and proof of concepts (Winbox, JSProxy, scanners, honeypots).
