@@ -1,5 +1,6 @@
 /.git/
 /.idea/
 /routeros_data/
+/root_test/
 /*.vdi
 /docker-compose.yml
