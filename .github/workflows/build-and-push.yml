@@ -89,13 +89,13 @@ jobs:
         id: compare
         run: |
           set -e
-          # download-artifact puts each artifact in a dir named after the artifact
+          # download-artifact: file may be in artifact-named dir or merged into cwd
           DH=dh-tags/dh-tags.txt
           STABLE=mikrotik-stable/stable-versions.txt
           [ -f "$DH" ] || DH=$(find . -name dh-tags.txt | head -1)
           [ -f "$STABLE" ] || STABLE=$(find . -name stable-versions.txt | head -1)
-          cp "$DH" dh-tags.txt
-          cp "$STABLE" stable-versions.txt
+          cat "$DH" > dh-tags.txt.tmp && mv dh-tags.txt.tmp dh-tags.txt
+          cat "$STABLE" > stable-versions.txt.tmp && mv stable-versions.txt.tmp stable-versions.txt
           echo "=== Comparing: which stable versions are missing on Docker Hub ==="
           echo "Docker Hub tags count: $(wc -l < dh-tags.txt)"
           echo "Stable versions count: $(wc -l < stable-versions.txt)"
