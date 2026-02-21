@@ -14,20 +14,23 @@ jobs:
         run: |
           OWNER="evilfreelancer"
           REPO="docker-routeros"
+          IMAGE="${OWNER}/${REPO}"
           : > dh-tags.txt
-          URL="https://hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
-          while [ -n "$URL" ]; do
-            RESP=$(curl -sS -w "\n%{http_code}" "$URL")
-            HTTP_CODE=$(echo "$RESP" | tail -n1)
-            BODY=$(echo "$RESP" | sed '$d')
-            if [ "$HTTP_CODE" != "200" ]; then
-              echo "Docker Hub API returned HTTP $HTTP_CODE. Response body (first 500 chars):"
-              echo "$BODY" | head -c 500
-              exit 1
-            fi
-            echo "$BODY" | jq -r '(.results // [])[].name' >> dh-tags.txt
-            URL=$(echo "$BODY" | jq -r '.next // empty')
-          done
+          # Docker Registry API v2: get pull token (no login for public repo), then tags/list
+          TOKEN=$(curl -sS "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${IMAGE}:pull" | jq -r '.token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to get registry token"
+            exit 1
+          fi
+          RESP=$(curl -sS -w "\n%{http_code}" -H "Authorization: Bearer $TOKEN" "https://registry-1.docker.io/v2/${IMAGE}/tags/list")
+          HTTP_CODE=$(echo "$RESP" | tail -n1)
+          BODY=$(echo "$RESP" | sed '$d')
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Registry API returned HTTP $HTTP_CODE. Response (first 500 chars):"
+            echo "$BODY" | head -c 500
+            exit 1
+          fi
+          echo "$BODY" | jq -r '(.tags // [])[]' >> dh-tags.txt
           echo "Docker Hub tags count: $(wc -l < dh-tags.txt)"
       - name: Upload Docker Hub tags
         uses: actions/upload-artifact@v4
