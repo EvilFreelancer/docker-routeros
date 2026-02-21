@@ -6,100 +6,197 @@ on:
     - cron: '0 0 * * *' # Every day at midnight
 
 jobs:
-  check-and-build:
+  # --- Stage 1a: fetch Docker Hub tags (runs in parallel with fetch-mikrotik) ---
+  fetch-dockerhub:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: sudo apt-get install -y curl jq
-
-      - name: Get latest RouterOS version
-        id: get_routeros_version
+      - name: Fetch Docker Hub tags
         run: |
-          VERSION=$(
-            curl https://mikrotik.com/download/archive -o - 2>/dev/null | \
+          OWNER="evilfreelancer"
+          REPO="docker-routeros"
+          URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
+          while [ -n "$URL" ]; do
+            RESP=$(curl -s "$URL")
+            echo "$RESP" | jq -r '.results[].name' >> dh-tags.txt
+            URL=$(echo "$RESP" | jq -r '.next // empty')
+          done
+          echo "Docker Hub tags count: $(wc -l < dh-tags.txt)"
+      - name: Upload Docker Hub tags
+        uses: actions/upload-artifact@v4
+        with:
+          name: dh-tags
+          path: dh-tags.txt
+
+  # --- Stage 1b: fetch Mikrotik stable versions (runs in parallel with fetch-dockerhub) ---
+  fetch-mikrotik:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Mikrotik stable versions
+        run: |
+          curl https://mikrotik.com/download/archive -o - 2>/dev/null | \
             grep -o '<a href=['"'"'"][^"'"'"']*['"'"'"]' | \
             sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' | \
             grep -i c-stable | \
             sed -r 's/\#c-stable-v//gi' | \
             sed -r 's/_/\./gi' | \
-            sort -V | \
-            tail -n 1
-          )
-          
-          echo "Latest RouterOS version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+            sort -V | uniq > stable-versions.txt
+          echo "Stable versions count: $(wc -l < stable-versions.txt)"
+      - name: Upload Mikrotik stable versions
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikrotik-stable
+          path: stable-versions.txt
 
-      - name: Get Docker Hub tags and compute tag names
-        id: docker_hub_check
+  # --- Stage 2: compare and decide what to build ---
+  discover:
+    runs-on: ubuntu-latest
+    needs: [fetch-dockerhub, fetch-mikrotik]
+    outputs:
+      has_missing: ${{ steps.compare.outputs.has_missing }}
+      has_newest: ${{ steps.compare.outputs.has_newest }}
+      newest_version: ${{ steps.compare.outputs.newest_version }}
+      major: ${{ steps.compare.outputs.major }}
+      major_minor: ${{ steps.compare.outputs.major_minor }}
+    steps:
+      - name: Download Docker Hub tags
+        uses: actions/download-artifact@v4
+        with:
+          name: dh-tags
+      - name: Download Mikrotik stable versions
+        uses: actions/download-artifact@v4
+        with:
+          name: mikrotik-stable
+      - name: Compare and compute missing
+        id: compare
         run: |
-          OWNER="evilfreelancer"
-          REPO="docker-routeros"
-          VERSION="${{ steps.get_routeros_version.outputs.version }}"
-          # Only stable versions from get_routeros_version; skip if empty
-          if [ -z "$VERSION" ]; then
-            echo "version_exists=true" >> $GITHUB_OUTPUT
+          set -e
+          # download-artifact puts each artifact in a dir named after the artifact
+          DH=dh-tags/dh-tags.txt
+          STABLE=mikrotik-stable/stable-versions.txt
+          [ -f "$DH" ] || DH=$(find . -name dh-tags.txt | head -1)
+          [ -f "$STABLE" ] || STABLE=$(find . -name stable-versions.txt | head -1)
+          cp "$DH" dh-tags.txt
+          cp "$STABLE" stable-versions.txt
+          echo "=== Comparing: which stable versions are missing on Docker Hub ==="
+          echo "Docker Hub tags count: $(wc -l < dh-tags.txt)"
+          echo "Stable versions count: $(wc -l < stable-versions.txt)"
+          MISSING=$(mktemp)
+          while IFS= read -r ver; do
+            [ -z "$ver" ] && continue
+            grep -qxF "$ver" dh-tags.txt 2>/dev/null || echo "$ver" >> "$MISSING"
+          done < stable-versions.txt
+          MISSING_COUNT=$(wc -l < "$MISSING" 2>/dev/null || echo 0)
+          if [ "$MISSING_COUNT" -eq 0 ]; then
+            echo "No missing versions. All stable versions are already on Docker Hub."
+            echo "has_missing=false" >> $GITHUB_OUTPUT
+          else
+            echo "Missing versions (to build):"
+            cat "$MISSING" | sed 's/^/  /'
+            echo "has_missing=true" >> $GITHUB_OUTPUT
+            cp "$MISSING" missing-versions.txt
+          fi
+          NEWEST=$(tail -n 1 stable-versions.txt 2>/dev/null || true)
+          if [ -z "$NEWEST" ]; then
+            echo "has_newest=false" >> $GITHUB_OUTPUT
+            echo "newest_version=" >> $GITHUB_OUTPUT
             echo "major=" >> $GITHUB_OUTPUT
             echo "major_minor=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-2)
-          echo "major=$MAJOR" >> $GITHUB_OUTPUT
-          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
-          TAGS_FILE=$(mktemp)
-          URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
-          while [ -n "$URL" ]; do
-            RESP=$(curl -s "$URL")
-            echo "$RESP" | jq -r '.results[].name' >> "$TAGS_FILE"
-            URL=$(echo "$RESP" | jq -r '.next // empty')
-          done
-          if grep -qxF "$VERSION" "$TAGS_FILE" 2>/dev/null; then
-            echo "version_exists=true" >> $GITHUB_OUTPUT
           else
-            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "Newest stable version: $NEWEST"
+            echo "has_newest=true" >> $GITHUB_OUTPUT
+            echo "newest_version=$NEWEST" >> $GITHUB_OUTPUT
+            echo "major=$(echo "$NEWEST" | cut -d. -f1)" >> $GITHUB_OUTPUT
+            echo "major_minor=$(echo "$NEWEST" | cut -d. -f1-2)" >> $GITHUB_OUTPUT
           fi
-          echo "Tags on Docker Hub (sample):"
-          head -20 "$TAGS_FILE"
-          rm -f "$TAGS_FILE"
+          rm -f "$MISSING"
+      - name: Upload missing versions list
+        if: steps.compare.outputs.has_missing == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: missing-versions
+          path: missing-versions.txt
 
+  # --- Stage 3a: build missing images ---
+  build:
+    runs-on: ubuntu-latest
+    needs: discover
+    if: needs.discover.outputs.has_missing == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Download missing versions list
+        uses: actions/download-artifact@v4
+        with:
+          name: missing-versions
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push image
-        if: steps.docker_hub_check.outputs.version_exists == 'false' && steps.docker_hub_check.outputs.major != ''
+      - name: Build and push missing images
         run: |
-          VERSION="${{ steps.get_routeros_version.outputs.version }}"
-          MAJOR="${{ steps.docker_hub_check.outputs.major }}"
-          MAJOR_MINOR="${{ steps.docker_hub_check.outputs.major_minor }}"
           OWNER="evilfreelancer"
           REPO="docker-routeros"
+          LIST=missing-versions.txt
+          [ -f missing-versions/missing-versions.txt ] && LIST=missing-versions/missing-versions.txt
+          echo "Building images for versions:"
+          cat "$LIST" | while read -r ver; do
+            [ -z "$ver" ] && continue
+            echo "  - $ver"
+          done
           docker buildx create --use --name routeros_builder
-          docker buildx build --push \
-            --platform linux/amd64,linux/arm64 \
-            --tag $OWNER/$REPO:$VERSION \
-            --tag $OWNER/$REPO:$MAJOR_MINOR \
-            --tag $OWNER/$REPO:$MAJOR \
-            --tag $OWNER/$REPO:latest \
-            --build-arg ROUTEROS_VERSION=$VERSION .
+          cat "$LIST" | while read -r ver; do
+            [ -z "$ver" ] && continue
+            echo "Building and pushing $OWNER/$REPO:$ver ..."
+            docker buildx build --push \
+              --platform linux/amd64,linux/arm64 \
+              --tag $OWNER/$REPO:$ver \
+              --build-arg ROUTEROS_VERSION=$ver .
+          done
 
-      - name: Update moving tags (major, major.minor, latest)
-        if: steps.docker_hub_check.outputs.version_exists == 'true' && steps.docker_hub_check.outputs.major != ''
+  # --- Stage 3b: publish moving tags (major, major.minor, latest) ---
+  publish:
+    runs-on: ubuntu-latest
+    needs: discover
+    if: needs.discover.outputs.has_newest == 'true'
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Point moving tags to newest version
         run: |
-          VERSION="${{ steps.get_routeros_version.outputs.version }}"
-          MAJOR="${{ steps.docker_hub_check.outputs.major }}"
-          MAJOR_MINOR="${{ steps.docker_hub_check.outputs.major_minor }}"
           OWNER="evilfreelancer"
           REPO="docker-routeros"
-          IMAGE="$OWNER/$REPO:$VERSION"
+          NEWEST="${{ needs.discover.outputs.newest_version }}"
+          MAJOR="${{ needs.discover.outputs.major }}"
+          MAJOR_MINOR="${{ needs.discover.outputs.major_minor }}"
+          IMAGE="$OWNER/$REPO:$NEWEST"
+          echo "Pointing moving tags to $NEWEST: $MAJOR_MINOR, $MAJOR, latest"
           docker buildx imagetools create \
             -t $OWNER/$REPO:$MAJOR_MINOR \
             -t $OWNER/$REPO:$MAJOR \
             -t $OWNER/$REPO:latest \
             $IMAGE
-          echo "Updated tags $MAJOR_MINOR, $MAJOR, latest to point to $VERSION"
+          echo "Done. $MAJOR_MINOR, $MAJOR, latest now point to $NEWEST"
+
+  # --- Stage 4: summary (runs after build and publish) ---
+  summary:
+    runs-on: ubuntu-latest
+    needs: [discover, build, publish]
+    if: ${{ always() && needs.discover.result == 'success' }}
+    steps:
+      - name: Summary
+        run: |
+          echo "=== Summary ==="
+          if [ "${{ needs.discover.outputs.has_missing }}" = "true" ]; then
+            echo "Built and pushed images for versions listed in discover job."
+            echo "See build job log for the exact list."
+          else
+            echo "No new images built (all stable versions already on Docker Hub)."
+          fi
+          if [ "${{ needs.discover.outputs.has_newest }}" = "true" ]; then
+            echo "Moving tags (${{ needs.discover.outputs.major_minor }}, ${{ needs.discover.outputs.major }}, latest) point to: ${{ needs.discover.outputs.newest_version }}"
+          fi
+          echo "=== Finish ==="
