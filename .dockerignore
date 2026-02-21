@@ -1,6 +1,5 @@
 /.git/
-/.gitignore
-/README.md
 /.idea/
+/routeros_data/
 /*.vdi
 /docker-compose.yml

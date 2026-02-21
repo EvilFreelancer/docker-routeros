@@ -4,15 +4,17 @@ services:
     # Latest image
     image: evilfreelancer/docker-routeros:latest
     # or exact same version
-    #image: evilfreelancer/docker-routeros:6.49.19
+    #image: evilfreelancer/docker-routeros:7.20.8
     # or minor version
-    #image: evilfreelancer/docker-routeros:6.49
+    #image: evilfreelancer/docker-routeros:7.20
     # or major version
-    #image: evilfreelancer/docker-routeros:6
+    #image: evilfreelancer/docker-routeros:7
     # or build from sources
     #build:
     #  context: .
     #  dockerfile: Dockerfile
+    #  args:
+    #    - ROUTEROS_VERSION=7.20.8
     restart: unless-stopped
     cap_add:
       - NET_ADMIN

@@ -1,4 +1,4 @@
 /.idea/
+/routeros_data/
 /*.vdi
 /docker-compose.yml
-build.txt
