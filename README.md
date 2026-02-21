@@ -92,6 +92,92 @@ GitHub Actions runs on a schedule and on manual trigger. Only **stable** release
 
 So `latest` and major / major.minor tags always follow the newest stable RouterOS.
 
+## Inter-container networking (same Docker network + internet)
+
+By default the entrypoint uses bridge + TAP so the RouterOS guest gets the container IP via DHCP and can reach the internet. To have the guest also reach other containers on the same Docker network (by IP or service name), the image does the following:
+
+- Sets the container's eth0 MAC to the guest NIC MAC so the Docker bridge delivers replies to the VM to this port.
+- Optionally enables promiscuous mode on eth0 (default on) so the bridge port accepts all frames if the bridge does not learn the guest MAC.
+
+**Two or more RouterOS containers on the same Docker network:** each container must use a unique `ROUTEROS_NIC_MAC`, otherwise the bridge sees duplicate MACs and forwarding breaks. Set different MACs per service (e.g. `54:05:AB:CD:12:31`, `54:05:AB:CD:12:32`).
+
+Example: RouterOS and another service on one network with a fixed subnet:
+
+```yml
+services:
+  routeros:
+    image: evilfreelancer/docker-routeros:6.48.1
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
+    ports:
+      - "18728:8728"
+      - "18729:8729"
+    networks:
+      network1:
+
+  other-service:
+    image: your-image
+    networks:
+      network1:
+        ipv4_address: 172.18.0.5
+
+networks:
+  network1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1
+```
+
+Example: two RouterOS containers on the same network (each needs a unique MAC):
+
+```yml
+services:
+  routeros1:
+    image: evilfreelancer/docker-routeros:latest
+    environment:
+      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:31"
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun", "/dev/kvm"]
+    networks: [network1]
+
+  routeros2:
+    image: evilfreelancer/docker-routeros:latest
+    environment:
+      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:32"
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun", "/dev/kvm"]
+    networks: [network1]
+
+networks:
+  network1:
+    driver: bridge
+```
+
+Optional environment variables (stateless, no extra config files):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROUTEROS_NIC_MAC` | `54:05:AB:CD:12:31` | Guest NIC MAC; must be unique per container when several RouterOS containers share one network. eth0 is set to this MAC so the Docker bridge delivers traffic to the VM. |
+| `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
+| `ROUTEROS_ETH0_PROMISC` | `1` | Set to `1` to enable promiscuous mode on eth0 (bridge port). Set to `0` to disable. |
+
+Example with custom DNS and MAC:
+
+```yml
+  routeros:
+    image: evilfreelancer/docker-routeros:latest
+    environment:
+      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:31"
+      ROUTEROS_DHCP_DNS: "1.1.1.1 1.0.0.1"
+      ROUTEROS_ETH0_PROMISC: "1"
+```
+
 ## Exposed Ports
 
 The table below summarizes the ports exposed by the Docker image,
