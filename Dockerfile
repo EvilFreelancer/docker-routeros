@@ -1,5 +1,8 @@
 FROM alpine:3.23.3
 
+# Multi-arch: image is built for linux/amd64 and linux/arm64 (Apple Silicon).
+# RouterOS CHR is x86_64 only; on arm64 QEMU emulates x86_64 (no KVM on Mac/ARM).
+
 # For access via VNC
 EXPOSE 5900
 
@@ -11,7 +14,7 @@ WORKDIR /routeros
 
 RUN mkdir -p  /routeros_source
 
-# Install dependencies
+# Install dependencies (qemu-system-x86_64 works on both amd64 and arm64 for x86_64 guest)
 RUN set -xe \
     && apk add --no-cache --update \
     netcat-openbsd qemu-x86_64 qemu-system-x86_64 \

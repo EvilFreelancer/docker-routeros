@@ -13,6 +13,10 @@ environment that closely mimics a real RouterOS setup.
 For a production-ready RouterOS environment in Docker, consider the
 [VR Network Lab](https://github.com/plajjan/vrnetlab) project as an alternative.
 
+### Supported platforms
+
+The image is built for **linux/amd64** and **linux/arm64**. On Apple Silicon (M1/M2/M3) Docker will pull the arm64 image automatically. RouterOS CHR is x86_64 only; on arm64 the image runs RouterOS inside QEMU emulation (no KVM on Mac/ARM), so it may be slower than on amd64 with KVM.
+
 ## Getting Started
 
 ### Pulling the Image from Docker Hub
@@ -41,7 +45,7 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun
-      - /dev/kvm
+      - /dev/kvm   # omit on Apple Silicon (no KVM there; container uses QEMU emulation)
     ports:
       - "2222:22"
       - "23:23"
@@ -76,6 +80,13 @@ docker run -d -p 2222:22 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti ros
 ```
 
 Replace `7.16` with the desired [RouterOS version](https://mikrotik.com/download/archive). After starting the container, access RouterOS via VNC (port 5900) or SSH (port 2222).
+
+To build for both amd64 and arm64 (e.g. for Apple Silicon and x86):
+
+```bash
+docker buildx create --use --name routeros_builder
+docker buildx build --platform linux/amd64,linux/arm64 --build-arg ROUTEROS_VERSION=7.16 --tag ros .
+```
 
 ### How Images Are Published (CI)
 

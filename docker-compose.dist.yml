@@ -1,22 +1,12 @@
 services:
 
-  routeros-6-49-19:
+  routeros-exact:
     # Exact same version
     image: evilfreelancer/docker-routeros:6.49.19
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-      - /dev/kvm
-    ports:
-      - "12222:22"
-      - "12223:23"
-      - "18728:8728"
-      - "18729:8729"
-
-  routeros-6-49:
-    image: evilfreelancer/docker-routeros:6.49
+    # or
+    #image: evilfreelancer/docker-routeros:6.49
+    # or
+    #image: evilfreelancer/docker-routeros:6
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
