@@ -31,27 +31,35 @@ jobs:
             exit 1
           fi
           echo "$BODY" | jq -r '(.tags // [])[]' >> dh-tags.txt
-          echo "Docker Hub tags count: $(wc -l < dh-tags.txt)"
+          COUNT=$(wc -l < dh-tags.txt)
+          echo "Docker Hub tags count: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "Error: no tags received from Docker Hub"
+            exit 1
+          fi
       - name: Upload Docker Hub tags
         uses: actions/upload-artifact@v4
         with:
           name: dh-tags
           path: dh-tags.txt
 
-  # --- Stage 1b: fetch Mikrotik stable versions (runs in parallel with fetch-dockerhub) ---
+  # --- Stage 1b: fetch Mikrotik CHR versions from download/chr (stable channel) ---
   fetch-mikrotik:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch Mikrotik stable versions
+      - name: Fetch Mikrotik CHR versions
         run: |
-          curl https://mikrotik.com/download/archive -o - 2>/dev/null | \
-            grep -o '<a href=['"'"'"][^"'"'"']*['"'"'"]' | \
-            sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' | \
-            grep -i c-stable | \
-            sed -r 's/\#c-stable-v//gi' | \
-            sed -r 's/_/\./gi' | \
-            sort -V | uniq > stable-versions.txt
-          echo "Stable versions count: $(wc -l < stable-versions.txt)"
+          # https://mikrotik.com/download/chr lists CHR versions; extract quoted X.Y.Z (stable only, no rc/beta in token)
+          curl -sS "https://mikrotik.com/download/chr" | \
+            grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' | sort -V | uniq > stable-versions.txt
+          COUNT=$(wc -l < stable-versions.txt)
+          echo "Mikrotik CHR versions count: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "Error: no versions parsed from https://mikrotik.com/download/chr"
+            exit 1
+          fi
+          echo "Versions:"
+          cat stable-versions.txt | sed 's/^/  /'
       - name: Upload Mikrotik stable versions
         uses: actions/upload-artifact@v4
         with:
