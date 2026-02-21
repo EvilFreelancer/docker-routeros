@@ -32,12 +32,23 @@ jobs:
           echo "Latest RouterOS version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Get Docker Hub tags and check if version exists
+      - name: Get Docker Hub tags and compute tag names
         id: docker_hub_check
         run: |
           OWNER="evilfreelancer"
           REPO="docker-routeros"
           VERSION="${{ steps.get_routeros_version.outputs.version }}"
+          # Only stable versions from get_routeros_version; skip if empty
+          if [ -z "$VERSION" ]; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "major=" >> $GITHUB_OUTPUT
+            echo "major_minor=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
           TAGS_FILE=$(mktemp)
           URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
           while [ -n "$URL" ]; do
@@ -61,22 +72,34 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push image
-        if: steps.docker_hub_check.outputs.version_exists == 'false'
+        if: steps.docker_hub_check.outputs.version_exists == 'false' && steps.docker_hub_check.outputs.major != ''
         run: |
           VERSION="${{ steps.get_routeros_version.outputs.version }}"
+          MAJOR="${{ steps.docker_hub_check.outputs.major }}"
+          MAJOR_MINOR="${{ steps.docker_hub_check.outputs.major_minor }}"
           OWNER="evilfreelancer"
           REPO="docker-routeros"
-          
-          # Set up Docker Buildx
           docker buildx create --use --name routeros_builder
-
-          # Build and push images
           docker buildx build --push \
             --platform linux/amd64,linux/arm64 \
             --tag $OWNER/$REPO:$VERSION \
+            --tag $OWNER/$REPO:$MAJOR_MINOR \
+            --tag $OWNER/$REPO:$MAJOR \
             --tag $OWNER/$REPO:latest \
             --build-arg ROUTEROS_VERSION=$VERSION .
 
-      - name: Skip build
-        if: steps.docker_hub_check.outputs.version_exists == 'true'
-        run: echo "Version ${{ steps.get_routeros_version.outputs.version }} already exists on Docker Hub. Skipping build."
+      - name: Update moving tags (major, major.minor, latest)
+        if: steps.docker_hub_check.outputs.version_exists == 'true' && steps.docker_hub_check.outputs.major != ''
+        run: |
+          VERSION="${{ steps.get_routeros_version.outputs.version }}"
+          MAJOR="${{ steps.docker_hub_check.outputs.major }}"
+          MAJOR_MINOR="${{ steps.docker_hub_check.outputs.major_minor }}"
+          OWNER="evilfreelancer"
+          REPO="docker-routeros"
+          IMAGE="$OWNER/$REPO:$VERSION"
+          docker buildx imagetools create \
+            -t $OWNER/$REPO:$MAJOR_MINOR \
+            -t $OWNER/$REPO:$MAJOR \
+            -t $OWNER/$REPO:latest \
+            $IMAGE
+          echo "Updated tags $MAJOR_MINOR, $MAJOR, latest to point to $VERSION"

@@ -79,13 +79,18 @@ Replace `7.16` with the desired [RouterOS version](https://mikrotik.com/download
 
 ### How Images Are Published (CI)
 
-GitHub Actions runs on a schedule and on manual trigger. It:
+GitHub Actions runs on a schedule and on manual trigger. Only **stable** releases are considered (RC, alpha, beta are ignored). It:
 
-1. Reads the latest stable RouterOS version from the [MikroTik download archive](https://mikrotik.com/download/archive).
+1. Reads the latest stable RouterOS version from the [MikroTik download archive](https://mikrotik.com/download/archive) (e.g. `7.16.1`).
 2. Fetches all existing tags for this image from Docker Hub (with pagination).
-3. If that version tag is missing on Docker Hub, builds the image for `linux/amd64` and `linux/arm64` and pushes both the version tag and `latest`.
+3. If that exact version is **missing** on Docker Hub: builds the image for `linux/amd64` and `linux/arm64`, then pushes tags:
+   - `7.16.1` (exact version)
+   - `7.16` (major.minor)
+   - `7` (major)
+   - `latest`
+4. If that version **already exists**: updates the moving tags so that `7.16`, `7`, and `latest` point to this image (no rebuild).
 
-So the image on Docker Hub stays in sync with the latest stable RouterOS; no build runs if the tag already exists.
+So `latest` and major / major.minor tags always follow the newest stable RouterOS.
 
 ## Exposed Ports
 
