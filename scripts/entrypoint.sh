@@ -11,16 +11,20 @@ cd /routeros
 QEMU_BRIDGE_ETH1='qemubr1'
 default_dev1='eth0'
 
-# Optional env: guest NIC MAC (must match QEMU -nic mac=). Setting container
+# Guest NIC MAC (must match QEMU -nic mac=). Setting container
 # eth0 to this MAC makes Docker bridge deliver replies to the VM to this port.
 ROUTEROS_NIC_MAC="${ROUTEROS_NIC_MAC:-54:05:AB:CD:12:31}"
 
-# Optional env: DNS servers for DHCP (space-separated). Passed to generate-dhcpd-conf.py.
+# DNS servers for DHCP (space-separated). Passed to generate-dhcpd-conf.py.
 ROUTEROS_DHCP_DNS="${ROUTEROS_DHCP_DNS:-8.8.8.8 8.8.4.4}"
 
-# Optional env: set eth0 promisc on for bridge port (1 = on). Helps some setups
+# Set eth0 promisc on for bridge port (1 = on). Helps some setups
 # with inter-container traffic when Docker bridge does not learn guest MAC.
 ROUTEROS_ETH0_PROMISC="${ROUTEROS_ETH0_PROMISC:-1}"
+
+# Directory exposed as FAT disk in the VM. Mount a Docker volume here
+# so files are visible in RouterOS and persist (see README).
+ROUTEROS_DATA_DIR="${ROUTEROS_DATA_DIR:-/data}"
 
 # DHCPD must have an IP address to run, but that address doesn't have to
 # be valid. This is the dummy address dhcpd is configured to use.
@@ -78,20 +82,29 @@ if [ "$CPU_FEATURES" = "" ]; then
    CPU_FEATURES="qemu64"
 fi
 
-# And run the VM! A brief explanation of the options here:
-# -enable-kvm: Use KVM for this VM (much faster for our case).
-# -nographic: disable SDL graphics.
-# -serial mon:stdio: use "monitored stdio" as our serial output.
-# -nic: Use a TAP interface with our custom up/down scripts.
-# -drive: The VM image we're booting.
-# mac: Set up your own interfaces mac addresses here, cause from winbox you can not change these later.
-exec qemu-system-x86_64 \
-   -serial mon:stdio \
-   -nographic \
-   -m 512 \
-   -smp 4,sockets=1,cores=4,threads=1 \
-   -cpu $CPU_FEATURES  \
-   $KVM_OPTS \
-   -nic tap,id=qemu1,mac=$ROUTEROS_NIC_MAC,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
-   "$@" \
-   -hda $ROUTEROS_IMAGE
+DISK_TO_USE="/routeros/$ROUTEROS_IMAGE"
+
+run_qemu() {
+   local EXTRA_DRIVES=()
+
+   if [ -n "$ROUTEROS_DATA_DIR" ] && [ -d "$ROUTEROS_DATA_DIR" ] && [ -w "$ROUTEROS_DATA_DIR" ]; then
+      EXTRA_DRIVES+=(-drive "file=fat:rw:$ROUTEROS_DATA_DIR,format=raw,if=virtio,media=disk")
+      echo "Host folder mapped as FAT disk: $ROUTEROS_DATA_DIR"
+   else
+      echo "Host folder not mapped (missing or not writable): $ROUTEROS_DATA_DIR"
+   fi
+
+   exec qemu-system-x86_64 \
+      -serial mon:stdio \
+      -nographic \
+      -m 512 \
+      -smp 4,sockets=1,cores=4,threads=1 \
+      -cpu $CPU_FEATURES \
+      $KVM_OPTS \
+      -nic tap,id=qemu1,mac=$ROUTEROS_NIC_MAC,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN \
+      "${EXTRA_DRIVES[@]}" \
+      "$@" \
+      -hda "$DISK_TO_USE"
+}
+
+run_qemu "$@"

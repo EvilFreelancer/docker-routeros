@@ -177,6 +177,7 @@ Optional environment variables (stateless, no extra config files):
 | `ROUTEROS_NIC_MAC` | `54:05:AB:CD:12:31` | Guest NIC MAC; must be unique per container when several RouterOS containers share one network. eth0 is set to this MAC so the Docker bridge delivers traffic to the VM. |
 | `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
 | `ROUTEROS_ETH0_PROMISC` | `1` | Set to `1` to enable promiscuous mode on eth0 (bridge port). Set to `0` to disable. |
+| `ROUTEROS_DATA_DIR` | `/data` | Folder in the container exposed to the VM as a FAT disk (VVFAT). Mount a Docker volume here so files are visible in RouterOS and persist across container/image updates. See "FAT disk from host folder" below. |
 
 Example with custom DNS and MAC:
 
@@ -188,6 +189,25 @@ Example with custom DNS and MAC:
       ROUTEROS_DHCP_DNS: "1.1.1.1 1.0.0.1"
       ROUTEROS_ETH0_PROMISC: "1"
 ```
+
+## FAT disk from host folder
+
+You can expose a folder from the container (and thus a Docker volume) to the VM as a second disk in FAT format. Set `ROUTEROS_DATA_DIR` to that path (default `/data`) and mount a volume there. The VM will see it as a virtio disk; in RouterOS you can use it for scripts, backups, or any files that should persist when you change the image tag.
+
+Example:
+
+```yml
+  routeros-persistent:
+    image: evilfreelancer/docker-routeros:latest
+    restart: unless-stopped
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun", "/dev/kvm"]
+    ports: ["32222:22", "38728:8728", "38729:8729"]
+    volumes:
+      - ./routeros_data:/data
+```
+
+Here `./routeros_data` is mounted at `/data` and exposed to the VM as a FAT disk.
 
 ## Exposed Ports
 

@@ -1,12 +1,18 @@
 services:
 
-  routeros-exact:
-    # Exact same version
-    image: evilfreelancer/docker-routeros:6.49.19
-    # or
+  routeros:
+    # Latest image
+    image: evilfreelancer/docker-routeros:latest
+    # or exact same version
+    #image: evilfreelancer/docker-routeros:6.49.19
+    # or minor version
     #image: evilfreelancer/docker-routeros:6.49
-    # or
+    # or major version
     #image: evilfreelancer/docker-routeros:6
+    # or build from sources
+    #build:
+    #  context: .
+    #  dockerfile: Dockerfile
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
@@ -14,45 +20,11 @@ services:
       - /dev/net/tun
       - /dev/kvm
     ports:
-      - "12222:22"
-      - "12223:23"
-      - "18728:8728"
-      - "18729:8729"
-
-  routeros-latest:
-    image: evilfreelancer/docker-routeros:latest
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-      - /dev/kvm
-    ports:
-      - "22222:22"
-      - "22223:23"
-      - "7777:80"
+      - "2222:22"
+      - "2223:23"
       - "8728:8728"
       - "8729:8729"
-      - "28728:8728"
-      - "28729:8729"
-
-  routeros-local:
-    image: evilfreelancer/docker-routeros:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-      - /dev/kvm
-    ports:
-      - "22222:22"
-      - "22223:23"
-      - "7777:80"
-      - "8728:8728"
-      - "8729:8729"
-      - "28728:8728"
-      - "28729:8729"
-      - "5900:5900"
+    # /data is exposed to the VM as a FAT disk (ROUTEROS_DATA_DIR). Files here
+    # are visible in RouterOS and persist across container/image updates.
+    volumes:
+      - ./routeros_data:/data
