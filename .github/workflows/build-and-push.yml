@@ -15,7 +15,7 @@ jobs:
           OWNER="evilfreelancer"
           REPO="docker-routeros"
           : > dh-tags.txt
-          URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
+          URL="https://hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
           while [ -n "$URL" ]; do
             RESP=$(curl -sS -w "\n%{http_code}" "$URL")
             HTTP_CODE=$(echo "$RESP" | tail -n1)
