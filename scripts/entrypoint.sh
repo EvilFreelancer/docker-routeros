@@ -7,11 +7,32 @@ fi
 
 cd /routeros
 
+ROUTEROS_DATA_DIR="${ROUTEROS_DATA_DIR:-/data}"
+NIC_MAC_FILE="$ROUTEROS_DATA_DIR/nic_mac"
+
+generate_nic_mac() {
+   local hex
+   hex=$(od -A n -N 6 -t x1 /dev/urandom 2>/dev/null | tr -d ' \n')
+   if [ -z "$hex" ] || [ ${#hex} -lt 12 ]; then
+      printf '52:%02x:%02x:%02x:%02x:%02x' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256))
+      return
+   fi
+   local b0=$(( (0x${hex:0:2} & 0xFE) | 0x02 ))
+   printf '%02x:%s:%s:%s:%s:%s' "$b0" "${hex:2:2}" "${hex:4:2}" "${hex:6:2}" "${hex:8:2}" "${hex:10:2}"
+}
+
+if [ -r "$NIC_MAC_FILE" ] && [ -s "$NIC_MAC_FILE" ]; then
+   ROUTEROS_NIC_MAC=$(tr -d '\n\r' < "$NIC_MAC_FILE")
+else
+   ROUTEROS_NIC_MAC="${ROUTEROS_NIC_MAC:-$(generate_nic_mac)}"
+   if [ -d "$ROUTEROS_DATA_DIR" ] && [ -w "$ROUTEROS_DATA_DIR" ]; then
+      printf '%s\n' "$ROUTEROS_NIC_MAC" > "$NIC_MAC_FILE"
+   fi
+fi
+
 QEMU_BRIDGE='qemubr1'
-ROUTEROS_NIC_MAC="${ROUTEROS_NIC_MAC:-54:05:AB:CD:12:31}"
 ROUTEROS_DHCP_DNS="${ROUTEROS_DHCP_DNS:-8.8.8.8 8.8.4.4}"
 ROUTEROS_ETH0_PROMISC="${ROUTEROS_ETH0_PROMISC:-1}"
-ROUTEROS_DATA_DIR="${ROUTEROS_DATA_DIR:-/data}"
 
 # When eth1 exists (container on two networks), use it for bridge so eth0 keeps IP for host port mapping.
 if ip link show eth1 &>/dev/null; then

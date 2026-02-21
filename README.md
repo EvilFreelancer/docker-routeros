@@ -116,7 +116,7 @@ So `latest` and major / major.minor tags always follow the newest stable RouterO
 
 - **Single network:** If the container has only one interface (eth0), it is put in the bridge and the VM gets the container IP via DHCP. Host port mapping then relies on the bridge forwarding to the VM; inter-container works. For reliable host access (SSH/telnet without hangs), prefer two networks.
 
-**Two or more RouterOS on the same Docker network:** each container must use a unique `ROUTEROS_NIC_MAC`, otherwise the bridge sees duplicate MACs and forwarding breaks (e.g. `54:05:AB:CD:12:31`, `54:05:AB:CD:12:32`).
+**Two or more RouterOS on the same Docker network:** each container needs a unique MAC. By default a unique MAC is generated per volume and stored in `ROUTEROS_DATA_DIR/nic_mac`; use different volumes per service so each gets its own MAC. To set a MAC explicitly, use `ROUTEROS_NIC_MAC` or write it to `nic_mac` in the data dir.
 
 ### Example: two RouterOS + host access and inter-container
 
@@ -136,11 +136,10 @@ services:
     restart: unless-stopped
     cap_add: [NET_ADMIN]
     devices: ["/dev/net/tun", "/dev/kvm"]
-    environment:
-      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:32"
     ports: ["3222:22", "3223:23", "18728:8728", "18729:8729"]
     volumes: ["./routeros_data2:/data"]
     networks: [default, routeros_net]
+    # Each volume gets its own MAC in nic_mac; no need to set ROUTEROS_NIC_MAC unless you want a fixed value.
 
 networks:
   routeros_net:
@@ -175,7 +174,7 @@ networks:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROUTEROS_NIC_MAC` | `54:05:AB:CD:12:31` | MAC of the guest NIC on the bridge (TAP). Must be unique per container when several RouterOS share one network. |
+| `ROUTEROS_NIC_MAC` | (generated) | MAC of the guest NIC on the bridge (TAP). At start the value is read from `ROUTEROS_DATA_DIR/nic_mac` if the file exists; otherwise the env is used if set, else a unique MAC is generated and written to that file so it persists per volume. Set this env only to override the stored or generated value. |
 | `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
 | `ROUTEROS_ETH0_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the bridge port (eth0 or eth1). Set to `0` to disable. |
 | `ROUTEROS_DATA_DIR` | `/data` | Folder in the container exposed to the VM as a FAT disk (VVFAT). Mount a Docker volume here so files are visible in RouterOS and persist. See "FAT disk from host folder" below. |
@@ -193,7 +192,7 @@ Example with custom DNS and MAC:
 
 ## FAT disk from host folder
 
-You can expose a folder from the container (and thus a Docker volume) to the VM as a second disk in FAT format. Set `ROUTEROS_DATA_DIR` to that path (default `/data`) and mount a volume there. The VM will see it as a virtio disk; in RouterOS you can use it for scripts, backups, or any files that should persist when you change the image tag.
+You can expose a folder from the container (and thus a Docker volume) to the VM as a second disk in FAT format. Set `ROUTEROS_DATA_DIR` to that path (default `/data`) and mount a volume there. The VM will see it as a virtio disk; in RouterOS you can use it for scripts, backups, or any files that should persist when you change the image tag. The same directory is used to store the bridge NIC MAC in `nic_mac` (read at start; if missing, a unique MAC is generated or taken from `ROUTEROS_NIC_MAC` and written there) so each volume keeps a stable MAC.
 
 Example:
 
