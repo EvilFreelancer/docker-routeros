@@ -1,3 +1,4 @@
+# Two networks: eth0 for host port mapping (SSH/telnet), eth1 bridged so VM is on routeros_net (containers see each other).
 services:
 
   routeros:
@@ -22,11 +23,17 @@ services:
       - /dev/net/tun
       - /dev/kvm
     ports:
+      #- "8080:80"
       - "2222:22"
       - "2223:23"
       - "8728:8728"
       - "8729:8729"
-    # /data is exposed to the VM as a FAT disk (ROUTEROS_DATA_DIR). Files here
-    # are visible in RouterOS and persist across container/image updates.
     volumes:
       - ./routeros_data:/data
+    networks:
+      - default
+      - routeros_net
+
+networks:
+  routeros_net:
+    driver: bridge
