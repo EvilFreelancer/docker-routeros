@@ -1,37 +1,35 @@
-# Mikrotik RouterOS in Docker
+# MikroTik RouterOS in Docker
 
-This project comprises a Docker image that runs a MikroTik's RouterOS
+This project provides a Docker image that runs a MikroTik RouterOS
 virtual machine inside QEMU.
 
-It's designed to simulate MikroTik's RouterOS environment, making it an
-excellent tool for development and testing purposes, especially for those
-working with the RouterOS API.
+It is designed to simulate a MikroTik RouterOS environment and is useful
+for development and testing, especially when working with the RouterOS API.
 
-This Docker image is particularly useful for unit testing the
-[routeros-api-php](https://github.com/EvilFreelancer/routeros-api-php) library, allowing developers to test applications
-in a controlled environment that closely mimics a real RouterOS setup.
+The image is well-suited for unit testing the
+[routeros-api-php](https://github.com/EvilFreelancer/routeros-api-php) library in a controlled
+environment that closely mimics a real RouterOS setup.
 
-For users seeking a fully operational RouterOS environment for production
-use within Docker, the [VR Network Lab](https://github.com/plajjan/vrnetlab) project is recommended
-as an alternative.
+For a production-ready RouterOS environment in Docker, consider the
+[VR Network Lab](https://github.com/plajjan/vrnetlab) project as an alternative.
 
 ## Getting Started
 
 ### Pulling the Image from Docker Hub
 
-To use the image directly from Docker Hub, you can pull it and run a
-container as shown below. This will start a RouterOS instance with ports
-configured for SSH, API, API-SSL, and VNC access.
+Pull and run the image (optionally pin to a [RouterOS version tag](https://hub.docker.com/r/evilfreelancer/docker-routeros/tags/)):
 
 ```bash
 docker pull evilfreelancer/docker-routeros
 docker run -d -p 2222:22 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti evilfreelancer/docker-routeros
 ```
 
+Ports are exposed for SSH, API, API-SSL, and VNC.
+
 ### Use in `docker-compose.yml`
 
-For those preferring docker-compose, an example configuration is provided
-below. More examples is [here](docker-compose.dist.yml).
+For those preferring Docker Compose, an example is below. More examples are in
+[docker-compose.dist.yml](docker-compose.dist.yml).
 
 ```yml
 version: "3.9"
@@ -68,19 +66,26 @@ RUN /your-scripts.sh
 
 ### Building from Source
 
-If you prefer to build the Docker image from source, the commands below
-will guide you through cloning the repository, building the image, and
-running a RouterOS container.
+To build the image from source (e.g. for a specific RouterOS version):
 
 ```bash
 git clone https://github.com/EvilFreelancer/docker-routeros.git
 cd docker-routeros
-docker build . --tag ros
+docker build --build-arg ROUTEROS_VERSION=7.16 --tag ros .
 docker run -d -p 2222:22 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti ros
 ```
 
-After launching the container, you can access your RouterOS instance
-via VNC (port 5900) and SSH (port 2222).
+Replace `7.16` with the desired [RouterOS version](https://mikrotik.com/download/archive). After starting the container, access RouterOS via VNC (port 5900) or SSH (port 2222).
+
+### How Images Are Published (CI)
+
+GitHub Actions runs on a schedule and on manual trigger. It:
+
+1. Reads the latest stable RouterOS version from the [MikroTik download archive](https://mikrotik.com/download/archive).
+2. Fetches all existing tags for this image from Docker Hub (with pagination).
+3. If that version tag is missing on Docker Hub, builds the image for `linux/amd64` and `linux/arm64` and pushes both the version tag and `latest`.
+
+So the image on Docker Hub stays in sync with the latest stable RouterOS; no build runs if the tag already exists.
 
 ## Exposed Ports
 
@@ -97,11 +102,8 @@ catering to various services and protocols used by RouterOS.
 
 ## Links
 
-For more insights into Docker and virtualization technologies
-related to RouterOS and networking, explore the following resources:
-
-* [Mikrotik RouterOS in Docker using Qemu](https://habr.com/ru/articles/498012/) - An article on Habr that provides a guide on setting up Mikrotik RouterOS in Docker using Qemu, ideal for developers and network engineers interested in RouterOS virtualization.
-* [RouterOS API Client](https://github.com/EvilFreelancer/routeros-api-php) - GitHub repository for the RouterOS API PHP library, useful for interfacing with MikroTik devices.
-* [VR Network Lab](https://github.com/vrnetlab/vrnetlab) - A project for running network equipment in Docker containers, recommended for production-level RouterOS simulations.
-* [qemu-docker](https://github.com/joshkunz/qemu-docker) - A resource for integrating QEMU with Docker, enabling virtual machine emulation within containers.
-* [QEMU/KVM on Docker](https://github.com/ennweb/docker-kvm) - Demonstrates using QEMU/KVM virtualization within Docker containers for improved performance.
+* [MikroTik RouterOS in Docker using QEMU](https://habr.com/ru/articles/498012/) (Habr) - Setup guide for RouterOS in Docker with QEMU.
+* [RouterOS API Client](https://github.com/EvilFreelancer/routeros-api-php) - PHP library for the RouterOS API.
+* [VR Network Lab](https://github.com/vrnetlab/vrnetlab) - Run network equipment in Docker; alternative for production-like RouterOS.
+* [qemu-docker](https://github.com/joshkunz/qemu-docker) - QEMU in Docker.
+* [QEMU/KVM on Docker](https://github.com/ennweb/docker-kvm) - QEMU/KVM virtualization in Docker.

@@ -32,14 +32,27 @@ jobs:
           echo "Latest RouterOS version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Get Docker Hub tags
-        id: docker_hub_tags
+      - name: Get Docker Hub tags and check if version exists
+        id: docker_hub_check
         run: |
           OWNER="evilfreelancer"
           REPO="docker-routeros"
-          URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/"
-          TAGS=$(curl -s "$URL" | jq -r '.results[].name' | grep -v "latest")
-          echo "tags=$(echo $TAGS | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          VERSION="${{ steps.get_routeros_version.outputs.version }}"
+          TAGS_FILE=$(mktemp)
+          URL="https://registry.hub.docker.com/v2/repositories/${OWNER}/${REPO}/tags/?page_size=100"
+          while [ -n "$URL" ]; do
+            RESP=$(curl -s "$URL")
+            echo "$RESP" | jq -r '.results[].name' >> "$TAGS_FILE"
+            URL=$(echo "$RESP" | jq -r '.next // empty')
+          done
+          if grep -qxF "$VERSION" "$TAGS_FILE" 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+          fi
+          echo "Tags on Docker Hub (sample):"
+          head -20 "$TAGS_FILE"
+          rm -f "$TAGS_FILE"
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -47,8 +60,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and test if new version
-        if: ${{ !contains(steps.docker_hub_tags.outputs.tags, steps.get_routeros_version.outputs.version) }}
+      - name: Build and push image
+        if: steps.docker_hub_check.outputs.version_exists == 'false'
         run: |
           VERSION="${{ steps.get_routeros_version.outputs.version }}"
           OWNER="evilfreelancer"
@@ -65,5 +78,5 @@ jobs:
             --build-arg ROUTEROS_VERSION=$VERSION .
 
       - name: Skip build
-        if: ${{ contains(steps.docker_hub_tags.outputs.tags, steps.get_routeros_version.outputs.version) }}
-        run: echo "Version ${{ steps.get_routeros_version.outputs.version }} already exists. Skipping build."
+        if: steps.docker_hub_check.outputs.version_exists == 'true'
+        run: echo "Version ${{ steps.get_routeros_version.outputs.version }} already exists on Docker Hub. Skipping build."
