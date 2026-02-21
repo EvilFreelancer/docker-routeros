@@ -25,18 +25,16 @@ Pull and run the image (optionally pin to a [RouterOS version tag](https://hub.d
 
 ```bash
 docker pull evilfreelancer/docker-routeros
-docker run -d -p 2222:22 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti evilfreelancer/docker-routeros
+docker run -d -p 2222:22 -p 2223:23 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti evilfreelancer/docker-routeros
 ```
 
-Ports are exposed for SSH, API, API-SSL, and VNC.
+Ports are exposed for SSH (22), telnet (23), API (8728, 8729), and VNC (5900). Wait 30-60 seconds after start for RouterOS to boot, then connect e.g. `ssh -p 2222 admin@localhost` or `telnet localhost 2223`. For inter-container networking and more reliable host access, use Docker Compose with two networks (see below).
 
 ### Use in `docker-compose.yml`
 
-For those preferring Docker Compose, an example is below. More examples are in
-[docker-compose.dist.yml](docker-compose.dist.yml).
+Use **two networks** so that host port mapping (SSH, telnet, API) works reliably and the RouterOS guest is on a shared network with other containers. Copy [docker-compose.dist.yml](docker-compose.dist.yml) as a starting point.
 
 ```yml
-version: "3.9"
 services:
   routeros:
     image: evilfreelancer/docker-routeros:latest
@@ -48,12 +46,21 @@ services:
       - /dev/kvm   # omit on Apple Silicon (no KVM there; container uses QEMU emulation)
     ports:
       - "2222:22"
-      - "23:23"
-      - "80:80"
-      - "5900:5900"
+      - "2223:23"
       - "8728:8728"
       - "8729:8729"
+    volumes:
+      - ./routeros_data:/data
+    networks:
+      - default
+      - routeros_net
+
+networks:
+  routeros_net:
+    driver: bridge
 ```
+
+With two networks the container gets `eth0` (default) and `eth1` (routeros_net). The entrypoint leaves eth0 for host port mapping (QEMU forwards ports into the guest) and puts eth1 in a bridge so the VM gets an IP on `routeros_net` and can reach other containers. After the container starts, wait 30-60 seconds for RouterOS to boot, then connect via SSH (port 2222) or telnet (port 2223).
 
 ### Creating a Custom `Dockerfile`
 
@@ -79,7 +86,7 @@ docker build --build-arg ROUTEROS_VERSION=7.16 --tag ros .
 docker run -d -p 2222:22 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti ros
 ```
 
-Replace `7.16` with the desired [RouterOS version](https://mikrotik.com/download/archive). After starting the container, access RouterOS via VNC (port 5900) or SSH (port 2222).
+Replace `7.16` with the desired [RouterOS version](https://mikrotik.com/download/archive). After starting the container, wait 30-60 seconds for RouterOS to boot, then access via VNC (port 5900), SSH (port 2222), or telnet (port 2223).
 
 To build for both amd64 and arm64 (e.g. for Apple Silicon and x86):
 
@@ -103,66 +110,60 @@ GitHub Actions runs on a schedule and on manual trigger. Only **stable** release
 
 So `latest` and major / major.minor tags always follow the newest stable RouterOS.
 
-## Inter-container networking (same Docker network + internet)
+## Networking modes
 
-By default the entrypoint uses bridge + TAP so the RouterOS guest gets the container IP via DHCP and can reach the internet. To have the guest also reach other containers on the same Docker network (by IP or service name), the image does the following:
+- **Two networks (recommended):** Attach the container to `default` and a shared network (e.g. `routeros_net`). The container gets eth0 and eth1. The entrypoint leaves **eth0** for host port mapping (QEMU user-mode networking with hostfwd), so SSH, telnet, API, Winbox from the host work. **eth1** is put in a bridge with the VM TAP; the guest gets an IP on the shared network via DHCP and can reach other containers (and the internet via Docker gateway). Use this when you need both host access and inter-container visibility.
 
-- Sets the container's eth0 MAC to the guest NIC MAC so the Docker bridge delivers replies to the VM to this port.
-- Optionally enables promiscuous mode on eth0 (default on) so the bridge port accepts all frames if the bridge does not learn the guest MAC.
+- **Single network:** If the container has only one interface (eth0), it is put in the bridge and the VM gets the container IP via DHCP. Host port mapping then relies on the bridge forwarding to the VM; inter-container works. For reliable host access (SSH/telnet without hangs), prefer two networks.
 
-**Two or more RouterOS containers on the same Docker network:** each container must use a unique `ROUTEROS_NIC_MAC`, otherwise the bridge sees duplicate MACs and forwarding breaks. Set different MACs per service (e.g. `54:05:AB:CD:12:31`, `54:05:AB:CD:12:32`).
+**Two or more RouterOS on the same Docker network:** each container must use a unique `ROUTEROS_NIC_MAC`, otherwise the bridge sees duplicate MACs and forwarding breaks (e.g. `54:05:AB:CD:12:31`, `54:05:AB:CD:12:32`).
 
-Example: RouterOS and another service on one network with a fixed subnet:
+### Example: two RouterOS + host access and inter-container
 
 ```yml
 services:
   routeros:
-    image: evilfreelancer/docker-routeros:6.48.1
-    restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-      - /dev/kvm
-    ports:
-      - "18728:8728"
-      - "18729:8729"
-    networks:
-      network1:
-
-  other-service:
-    image: your-image
-    networks:
-      network1:
-        ipv4_address: 172.18.0.5
-
-networks:
-  network1:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.18.0.0/16
-          gateway: 172.18.0.1
-```
-
-Example: two RouterOS containers on the same network (each needs a unique MAC):
-
-```yml
-services:
-  routeros1:
     image: evilfreelancer/docker-routeros:latest
-    environment:
-      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:31"
+    restart: unless-stopped
     cap_add: [NET_ADMIN]
     devices: ["/dev/net/tun", "/dev/kvm"]
-    networks: [network1]
+    ports: ["2222:22", "2223:23", "8728:8728", "8729:8729"]
+    volumes: ["./routeros_data:/data"]
+    networks: [default, routeros_net]
 
   routeros2:
     image: evilfreelancer/docker-routeros:latest
-    environment:
-      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:32"
+    restart: unless-stopped
     cap_add: [NET_ADMIN]
     devices: ["/dev/net/tun", "/dev/kvm"]
+    environment:
+      ROUTEROS_NIC_MAC: "54:05:AB:CD:12:32"
+    ports: ["3222:22", "3223:23", "18728:8728", "18729:8729"]
+    volumes: ["./routeros_data2:/data"]
+    networks: [default, routeros_net]
+
+networks:
+  routeros_net:
+    driver: bridge
+```
+
+Connect from host: `ssh -p 2222 admin@localhost` or `telnet localhost 2223`. From inside either RouterOS guest you can reach the other by service name (e.g. `routeros2`) or by its IP on `routeros_net`.
+
+### Example: RouterOS and another service on one network
+
+```yml
+services:
+  routeros:
+    image: evilfreelancer/docker-routeros:latest
+    restart: unless-stopped
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun", "/dev/kvm"]
+    ports: ["2222:22", "2223:23", "8728:8728", "8729:8729"]
+    volumes: ["./routeros_data:/data"]
+    networks: [default, network1]
+
+  other-service:
+    image: your-image
     networks: [network1]
 
 networks:
@@ -170,14 +171,14 @@ networks:
     driver: bridge
 ```
 
-Optional environment variables (stateless, no extra config files):
+### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROUTEROS_NIC_MAC` | `54:05:AB:CD:12:31` | Guest NIC MAC; must be unique per container when several RouterOS containers share one network. eth0 is set to this MAC so the Docker bridge delivers traffic to the VM. |
+| `ROUTEROS_NIC_MAC` | `54:05:AB:CD:12:31` | MAC of the guest NIC on the bridge (TAP). Must be unique per container when several RouterOS share one network. |
 | `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
-| `ROUTEROS_ETH0_PROMISC` | `1` | Set to `1` to enable promiscuous mode on eth0 (bridge port). Set to `0` to disable. |
-| `ROUTEROS_DATA_DIR` | `/data` | Folder in the container exposed to the VM as a FAT disk (VVFAT). Mount a Docker volume here so files are visible in RouterOS and persist across container/image updates. See "FAT disk from host folder" below. |
+| `ROUTEROS_ETH0_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the bridge port (eth0 or eth1). Set to `0` to disable. |
+| `ROUTEROS_DATA_DIR` | `/data` | Folder in the container exposed to the VM as a FAT disk (VVFAT). Mount a Docker volume here so files are visible in RouterOS and persist. See "FAT disk from host folder" below. |
 
 Example with custom DNS and MAC:
 
@@ -202,12 +203,13 @@ Example:
     restart: unless-stopped
     cap_add: [NET_ADMIN]
     devices: ["/dev/net/tun", "/dev/kvm"]
-    ports: ["32222:22", "38728:8728", "38729:8729"]
+    ports: ["32222:22", "32223:23", "38728:8728", "38729:8729"]
     volumes:
       - ./routeros_data:/data
+    networks: [default, routeros_net]
 ```
 
-Here `./routeros_data` is mounted at `/data` and exposed to the VM as a FAT disk.
+Here `./routeros_data` is mounted at `/data` and exposed to the VM as a FAT disk. Two networks are used so host port mapping works reliably.
 
 ## Exposed Ports
 
