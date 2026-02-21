@@ -94,8 +94,9 @@ jobs:
           STABLE=mikrotik-stable/stable-versions.txt
           [ -f "$DH" ] || DH=$(find . -name dh-tags.txt | head -1)
           [ -f "$STABLE" ] || STABLE=$(find . -name stable-versions.txt | head -1)
-          cat "$DH" > dh-tags.txt.tmp && mv dh-tags.txt.tmp dh-tags.txt
-          cat "$STABLE" > stable-versions.txt.tmp && mv stable-versions.txt.tmp stable-versions.txt
+          # Normalize line endings (strip CR) so grep -x matches correctly
+          cat "$DH" | tr -d '\r' > dh-tags.txt.tmp && mv dh-tags.txt.tmp dh-tags.txt
+          cat "$STABLE" | tr -d '\r' > stable-versions.txt.tmp && mv stable-versions.txt.tmp stable-versions.txt
           echo "=== Comparing: which stable versions are missing on Docker Hub ==="
           echo "Docker Hub tags count: $(wc -l < dh-tags.txt)"
           echo "Stable versions count: $(wc -l < stable-versions.txt)"
@@ -173,10 +174,10 @@ jobs:
               --build-arg ROUTEROS_VERSION=$ver .
           done
 
-  # --- Stage 3b: publish moving tags (major, major.minor, latest) ---
+  # --- Stage 3b: publish moving tags (runs after build so new images are pushed first) ---
   publish:
     runs-on: ubuntu-latest
-    needs: discover
+    needs: [discover, build]
     if: needs.discover.outputs.has_newest == 'true'
     steps:
       - name: Login to Docker Hub
@@ -184,21 +185,50 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Point moving tags to newest version
+      - name: Download built versions list
+        if: needs.discover.outputs.has_missing == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: missing-versions
+      - name: Update moving tags (major, major.minor, and latest for newest)
         run: |
+          set -e
           OWNER="evilfreelancer"
           REPO="docker-routeros"
           NEWEST="${{ needs.discover.outputs.newest_version }}"
-          MAJOR="${{ needs.discover.outputs.major }}"
-          MAJOR_MINOR="${{ needs.discover.outputs.major_minor }}"
-          IMAGE="$OWNER/$REPO:$NEWEST"
-          echo "Pointing moving tags to $NEWEST: $MAJOR_MINOR, $MAJOR, latest"
-          docker buildx imagetools create \
-            -t $OWNER/$REPO:$MAJOR_MINOR \
-            -t $OWNER/$REPO:$MAJOR \
-            -t $OWNER/$REPO:latest \
-            $IMAGE
-          echo "Done. $MAJOR_MINOR, $MAJOR, latest now point to $NEWEST"
+          LIST=""
+          [ -f missing-versions/missing-versions.txt ] && LIST=missing-versions/missing-versions.txt
+          [ -z "$LIST" ] && [ -f missing-versions.txt ] && LIST=missing-versions.txt
+          if [ -n "$LIST" ]; then
+            echo "Updating moving tags for each built version (major, major.minor; latest for newest only):"
+            sort -V "$LIST" | tr -d '\r' | while read -r ver; do
+              [ -z "$ver" ] && continue
+              MAJOR=$(echo "$ver" | cut -d. -f1)
+              MAJOR_MINOR=$(echo "$ver" | cut -d. -f1-2)
+              if [ "$ver" = "$NEWEST" ]; then
+                echo "  $ver -> $MAJOR_MINOR, $MAJOR, latest"
+                docker buildx imagetools create \
+                  -t $OWNER/$REPO:$MAJOR_MINOR \
+                  -t $OWNER/$REPO:$MAJOR \
+                  -t $OWNER/$REPO:latest \
+                  $OWNER/$REPO:$ver
+              else
+                echo "  $ver -> $MAJOR_MINOR, $MAJOR"
+                docker buildx imagetools create \
+                  -t $OWNER/$REPO:$MAJOR_MINOR \
+                  -t $OWNER/$REPO:$MAJOR \
+                  $OWNER/$REPO:$ver
+              fi
+            done
+          else
+            echo "No built versions list; updating only newest: $NEWEST -> ${{ needs.discover.outputs.major_minor }}, ${{ needs.discover.outputs.major }}, latest"
+            docker buildx imagetools create \
+              -t $OWNER/$REPO:${{ needs.discover.outputs.major_minor }} \
+              -t $OWNER/$REPO:${{ needs.discover.outputs.major }} \
+              -t $OWNER/$REPO:latest \
+              $OWNER/$REPO:$NEWEST
+          fi
+          echo "Done."
 
   # --- Stage 4: summary (runs after build and publish) ---
   summary:
