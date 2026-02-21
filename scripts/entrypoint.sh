@@ -83,15 +83,21 @@ if [ "$CPU_FEATURES" = "" ]; then
 fi
 
 DISK_TO_USE="/routeros/$ROUTEROS_IMAGE"
+# Second disk: raw file in data dir (created if missing). Size via ROUTEROS_DISK2_SIZE (default 256M)
+ROUTEROS_DISK2_FILE="${ROUTEROS_DATA_DIR}/disk2.raw"
+ROUTEROS_DISK2_SIZE="${ROUTEROS_DISK2_SIZE:-256M}"
 
 run_qemu() {
-   local EXTRA_DRIVES=()
+   local DRIVES=(-hda "$DISK_TO_USE")
 
    if [ -n "$ROUTEROS_DATA_DIR" ] && [ -d "$ROUTEROS_DATA_DIR" ] && [ -w "$ROUTEROS_DATA_DIR" ]; then
-      EXTRA_DRIVES+=(-drive "file=fat:rw:$ROUTEROS_DATA_DIR,format=raw,if=virtio,media=disk")
-      echo "Host folder mapped as FAT disk: $ROUTEROS_DATA_DIR"
-   else
-      echo "Host folder not mapped (missing or not writable): $ROUTEROS_DATA_DIR"
+      if [ ! -f "$ROUTEROS_DISK2_FILE" ]; then
+         truncate -s "$ROUTEROS_DISK2_SIZE" "$ROUTEROS_DISK2_FILE" || true
+      fi
+      if [ -f "$ROUTEROS_DISK2_FILE" ]; then
+         DRIVES+=(-drive "file=$ROUTEROS_DISK2_FILE,format=raw,if=ide,index=1,media=disk")
+         echo "Second disk (hdb): $ROUTEROS_DISK2_FILE"
+      fi
    fi
 
    local NIC_OPTS=()
@@ -108,9 +114,8 @@ run_qemu() {
       -cpu $CPU_FEATURES \
       $KVM_OPTS \
       "${NIC_OPTS[@]}" \
-      "${EXTRA_DRIVES[@]}" \
-      "$@" \
-      -hda "$DISK_TO_USE"
+      "${DRIVES[@]}" \
+      "$@"
 }
 
 run_qemu "$@"

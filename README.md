@@ -177,7 +177,8 @@ networks:
 | `ROUTEROS_NIC_MAC` | (generated) | MAC of the guest NIC on the bridge (TAP). At start the value is read from `ROUTEROS_DATA_DIR/nic_mac` if the file exists; otherwise the env is used if set, else a unique MAC is generated and written to that file so it persists per volume. Set this env only to override the stored or generated value. |
 | `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
 | `ROUTEROS_ETH_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the bridge port (eth0 or eth1). Set to `0` to disable. |
-| `ROUTEROS_DATA_DIR` | `/data` | Folder in the container exposed to the VM as a FAT disk (VVFAT). Mount a Docker volume here so files are visible in RouterOS and persist. See "FAT disk from host folder" below. |
+| `ROUTEROS_DATA_DIR` | `/data` | Directory used for persistent data: a second disk image file is stored here and the bridge NIC MAC is saved in `nic_mac`. Mount a Docker volume here so the second disk and MAC persist. See "Second disk (volume)" below. |
+| `ROUTEROS_DISK2_SIZE` | `256M` | Size of the second disk image when it is created automatically (e.g. `512M`, `1G`). Used only when `ROUTEROS_DATA_DIR/disk2.raw` does not exist yet. |
 
 Example with custom DNS and MAC:
 
@@ -190,9 +191,19 @@ Example with custom DNS and MAC:
       ROUTEROS_ETH_PROMISC: "1"
 ```
 
-## FAT disk from host folder
+## Second disk (volume)
 
-You can expose a folder from the container (and thus a Docker volume) to the VM as a second disk in FAT format. Set `ROUTEROS_DATA_DIR` to that path (default `/data`) and mount a volume there. The VM will see it as a virtio disk; in RouterOS you can use it for scripts, backups, or any files that should persist when you change the image tag. The same directory is used to store the bridge NIC MAC in `nic_mac` (read at start; if missing, a unique MAC is generated or taken from `ROUTEROS_NIC_MAC` and written there) so each volume keeps a stable MAC.
+When you mount a volume at `ROUTEROS_DATA_DIR` (default `/data`), the entrypoint creates a raw disk image file `disk2.raw` there if it does not exist (size from `ROUTEROS_DISK2_SIZE`, default 256M). This file is attached to the VM as a second IDE disk (hdb). RouterOS sees it as a block device (e.g. `sata1` in `/disk print`).
+
+**One-time setup in RouterOS:** format the second disk so it appears in `/file`:
+
+```
+/disk format sata1 file-system=ext4 label=data
+```
+
+After formatting, the disk is mounted automatically and appears in `/file print` (e.g. as `sata1`). You can use it for backups, scripts, logs, proxy cache, or any persistent data. The data is stored in `disk2.raw` on the host, so it survives container restarts and image updates.
+
+The same directory holds `nic_mac` for the bridge NIC; each volume keeps its own MAC and its own second disk.
 
 Example:
 
@@ -205,10 +216,12 @@ Example:
     ports: ["32222:22", "32223:23", "38728:8728", "38729:8729"]
     volumes:
       - ./routeros_data:/data
+    environment:
+      ROUTEROS_DISK2_SIZE: "512M"   # optional; default 256M
     networks: [default, routeros_net]
 ```
 
-Here `./routeros_data` is mounted at `/data` and exposed to the VM as a FAT disk. Two networks are used so host port mapping works reliably.
+Here `./routeros_data` is mounted at `/data`. On first start, `routeros_data/disk2.raw` is created (512M in this example). In RouterOS, run `/disk format sata1 file-system=ext4 label=data` once; then the second disk is available in `/file` and persists across restarts.
 
 ## Exposed Ports
 
@@ -231,3 +244,4 @@ catering to various services and protocols used by RouterOS.
 * [qemu-docker](https://github.com/joshkunz/qemu-docker) - QEMU in Docker.
 * [QEMU/KVM on Docker](https://github.com/ennweb/docker-kvm) - QEMU/KVM virtualization in Docker.
 * [tenable/routeros](https://github.com/tenable/routeros) - RouterOS security research tooling and proof of concepts (Winbox, JSProxy, scanners, honeypots).
+* https://help.mikrotik.com/docs/spaces/ROS/pages/91193346/Disks
