@@ -38,7 +38,7 @@ jobs:
             exit 1
           fi
       - name: Upload Docker Hub tags
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dh-tags
           path: dh-tags.txt
@@ -61,7 +61,7 @@ jobs:
           echo "Versions:"
           cat stable-versions.txt | sed 's/^/  /'
       - name: Upload Mikrotik stable versions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mikrotik-stable
           path: stable-versions.txt
@@ -131,7 +131,7 @@ jobs:
           rm -f "$MISSING"
       - name: Upload missing versions list
         if: steps.compare.outputs.has_missing == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: missing-versions
           path: missing-versions.txt
