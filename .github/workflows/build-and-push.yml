@@ -78,11 +78,11 @@ jobs:
       major_minor: ${{ steps.compare.outputs.major_minor }}
     steps:
       - name: Download Docker Hub tags
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dh-tags
       - name: Download Mikrotik stable versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: mikrotik-stable
       - name: Compare and compute missing
@@ -145,7 +145,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       - name: Download missing versions list
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: missing-versions
       - name: Login to Docker Hub
@@ -187,7 +187,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Download built versions list
         if: needs.discover.outputs.has_missing == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: missing-versions
       - name: Update moving tags (major, major.minor, and latest for newest)
