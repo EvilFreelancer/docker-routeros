@@ -1,4 +1,4 @@
-FROM alpine:3.24.0
+FROM alpine:3.24.1
 
 # Multi-arch: image is built for linux/amd64 and linux/arm64 (Apple Silicon).
 # RouterOS CHR is x86_64 only; on arm64 QEMU emulates x86_64 (no KVM on Mac/ARM).
