@@ -1,4 +1,6 @@
-# Two networks: eth0 for host port mapping (SSH/telnet), eth1 bridged so VM is on routeros_net (containers see each other).
+# Two networks: the IPv4 default-route interface serves published ports; the other is bridged to the guest.
+# Requires Docker Compose 2.33.1+ for gw_priority, which pins default as the uplink.
+# One network is enough for WebFig/SSH/API; the second adds direct guest networking.
 services:
 
   routeros:
@@ -23,7 +25,7 @@ services:
       - /dev/net/tun
       - /dev/kvm
     ports:
-      #- "8080:80"
+      - "127.0.0.1:8080:80" # WebFig; use an SSH tunnel for remote VPS access
       - "2222:22"
       - "2223:23"
       - "8728:8728"
@@ -31,8 +33,9 @@ services:
     volumes:
       - ./routeros_data:/data
     networks:
-      - default
-      - routeros_net
+      default:
+        gw_priority: 1
+      routeros_net: {}
 
 networks:
   routeros_net:

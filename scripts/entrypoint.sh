@@ -34,21 +34,10 @@ QEMU_BRIDGE='qemubr1'
 ROUTEROS_DHCP_DNS="${ROUTEROS_DHCP_DNS:-8.8.8.8 8.8.4.4}"
 ROUTEROS_ETH_PROMISC="${ROUTEROS_ETH_PROMISC:-1}"
 
-# When eth1 exists (container on two networks), use it for bridge so eth0 keeps IP for host port mapping.
-if ip link show eth1 &>/dev/null; then
-   BRIDGE_IF='eth1'
-   USE_HOSTFWD=1
-else
-   BRIDGE_IF='eth0'
-   USE_HOSTFWD=0
-fi
-
 DUMMY_DHCPD_IP='10.0.0.1'
 QEMU_IFUP='/routeros/qemu-ifup'
 QEMU_IFDOWN='/routeros/qemu-ifdown'
 DHCPD_CONF_FILE='/routeros/dhcpd.conf'
-
-/routeros/generate-dhcpd-conf.py $QEMU_BRIDGE --addr-from "$BRIDGE_IF" $ROUTEROS_DHCP_DNS >$DHCPD_CONF_FILE
 
 function prepare_intf() {
    ip addr flush dev $1
@@ -62,8 +51,26 @@ function prepare_intf() {
    fi
 }
 
-prepare_intf "$BRIDGE_IF" $QEMU_BRIDGE
-udhcpd -I $DUMMY_DHCPD_IP -f $DHCPD_CONF_FILE &
+# Preserve the Docker uplink for published ports; interface numbering can vary.
+BRIDGE_IF=''
+if ip link show eth1 &>/dev/null; then
+   if ! DEFAULT_ROUTE=$(ip -4 route show default); then
+      echo "Could not read the IPv4 default route; refusing to change network interfaces." >&2
+      exit 1
+   fi
+   if [[ ! "$DEFAULT_ROUTE" =~ (^|[[:space:]])dev[[:space:]]+(eth[01])([[:space:]]|$) ]]; then
+      echo "Expected an IPv4 default route on eth0 or eth1; refusing to change network interfaces." >&2
+      exit 1
+   fi
+   UPLINK_IF="${BASH_REMATCH[2]}"
+   BRIDGE_IF='eth1'
+   if [ "$UPLINK_IF" = "eth1" ]; then
+      BRIDGE_IF='eth0'
+   fi
+   /routeros/generate-dhcpd-conf.py $QEMU_BRIDGE --addr-from "$BRIDGE_IF" $ROUTEROS_DHCP_DNS >$DHCPD_CONF_FILE
+   prepare_intf "$BRIDGE_IF" $QEMU_BRIDGE
+   udhcpd -I $DUMMY_DHCPD_IP -f $DHCPD_CONF_FILE &
+fi
 
 QEMU_NIC_USER="user,hostfwd=tcp::22-:22,hostfwd=tcp::23-:23,hostfwd=tcp::80-:80,hostfwd=tcp::443-:443,hostfwd=tcp::8728-:8728,hostfwd=tcp::8729-:8729,hostfwd=tcp::8291-:8291,hostfwd=tcp::5900-:5900,hostfwd=tcp::21-:21,hostfwd=tcp::1194-:1194,hostfwd=tcp::1701-:1701,hostfwd=tcp::1723-:1723,hostfwd=udp::500-:500,hostfwd=udp::4500-:4500,hostfwd=udp::1812-:1812,hostfwd=udp::1813-:1813"
 
@@ -100,10 +107,8 @@ run_qemu() {
       fi
    fi
 
-   local NIC_OPTS=()
-   if [ "$USE_HOSTFWD" = "1" ]; then
-      NIC_OPTS+=(-nic "$QEMU_NIC_USER" -nic "tap,id=qemu1,mac=$ROUTEROS_NIC_MAC,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN")
-   else
+   local NIC_OPTS=(-nic "$QEMU_NIC_USER")
+   if [ -n "$BRIDGE_IF" ]; then
       NIC_OPTS+=(-nic "tap,id=qemu1,mac=$ROUTEROS_NIC_MAC,script=$QEMU_IFUP,downscript=$QEMU_IFDOWN")
    fi
    exec qemu-system-x86_64 \
