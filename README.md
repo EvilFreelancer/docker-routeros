@@ -25,14 +25,14 @@ Pull and run the image (optionally pin to a [RouterOS version tag](https://hub.d
 
 ```bash
 docker pull evilfreelancer/docker-routeros
-docker run -d -p 2222:22 -p 2223:23 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti evilfreelancer/docker-routeros
+docker run -d -p 127.0.0.1:8080:80 -p 2222:22 -p 2223:23 -p 8728:8728 -p 8729:8729 -p 5900:5900 -ti evilfreelancer/docker-routeros
 ```
 
-Ports are exposed for SSH (22), telnet (23), API (8728, 8729), and VNC (5900). Wait 30-60 seconds after start for RouterOS to boot, then connect e.g. `ssh -p 2222 admin@localhost` or `telnet localhost 2223`. For inter-container networking and more reliable host access, use Docker Compose with two networks (see below).
+This publishes WebFig (guest port 80) on `http://127.0.0.1:8080`, plus SSH (22), telnet (23), API (8728, 8729), and VNC (5900). Wait 30-60 seconds after start for RouterOS to boot; emulation without KVM can take longer. Then open WebFig or connect with `ssh -p 2222 admin@localhost`. A single Docker network is enough for published management ports. Use two networks when the guest also needs a TAP bridge to other containers (see below).
 
 ### Use in `docker-compose.yml`
 
-Use **two networks** so that host port mapping (SSH, telnet, API) works reliably and the RouterOS guest is on a shared network with other containers. Copy [docker-compose.dist.yml](docker-compose.dist.yml) as a starting point.
+Copy [docker-compose.dist.yml](docker-compose.dist.yml) as a starting point. This example uses **two networks** for published management ports and a TAP bridge to a shared network. The two-network Compose examples require **Docker Compose 2.33.1+** for [`gw_priority`](https://docs.docker.com/reference/compose-file/services/#gw_priority): a higher value on `default` selects it as the uplink and leaves the shared network for the guest bridge. For WebFig alone, see the single-network example below.
 
 ```yml
 services:
@@ -45,6 +45,7 @@ services:
       - /dev/net/tun
       - /dev/kvm   # omit on Apple Silicon (no KVM there; container uses QEMU emulation)
     ports:
+      - "127.0.0.1:8080:80"
       - "2222:22"
       - "2223:23"
       - "8728:8728"
@@ -52,15 +53,43 @@ services:
     volumes:
       - ./routeros_data:/data
     networks:
-      - default
-      - routeros_net
+      default:
+        gw_priority: 1
+      routeros_net: {}
 
 networks:
   routeros_net:
     driver: bridge
 ```
 
-With two networks the container gets `eth0` (default) and `eth1` (routeros_net). The entrypoint leaves eth0 for host port mapping (QEMU forwards ports into the guest) and puts eth1 in a bridge so the VM gets an IP on `routeros_net` and can reach other containers. After the container starts, wait 30-60 seconds for RouterOS to boot, then connect via SSH (port 2222) or telnet (port 2223).
+With two networks the container gets `eth0` and `eth1`. The entrypoint preserves the interface carrying the IPv4 default route for published ports and bridges the other interface to the VM. Docker determines interface numbering and the default-route network, so do not assume that eth0 is the uplink. After RouterOS boots, open `http://127.0.0.1:8080` or connect via SSH (port 2222) or telnet (port 2223).
+
+### WebFig on a single network or VPS
+
+Publish **container port 80** to use WebFig. `EXPOSE` in the Dockerfile does not publish a port on the host. This minimal Compose example uses the default network only:
+
+```yml
+services:
+  routeros:
+    image: evilfreelancer/docker-routeros:latest
+    restart: unless-stopped
+    devices:
+      - /dev/kvm  # omit if unavailable; QEMU will use slower emulation
+    ports:
+      - "127.0.0.1:8080:80"
+```
+
+Run `docker compose up -d`, wait for RouterOS to boot, and open `http://127.0.0.1:8080` on the Docker host. For a remote VPS, keep the loopback binding and run an SSH tunnel from your workstation:
+
+```bash
+ssh -N -L 8080:127.0.0.1:8080 user@vps
+```
+
+Then open `http://127.0.0.1:8080` on your workstation. Replace `user@vps` with your VPS SSH login. Avoid publishing an unauthenticated RouterOS management interface to the internet; set a strong RouterOS password and restrict access. Other port mappings without a host IP bind on all host interfaces.
+
+If WebFig does not open, check `docker compose logs --tail=100 routeros`. DHCP `OFFER` and `ACK` messages are normal guest address negotiation, not KVM errors. A running container does not mean RouterOS has finished booting. For a customized guest, check `/ip service print` and its firewall rules to confirm that the `www` service allows access. HTTPS on port 443 requires a configured `www-ssl` service and certificate inside RouterOS.
+
+Older images moved eth0 into the guest bridge when only one network was attached, which could break published ports even after RouterOS booted. Their two-network mode also assumed eth0 was always the uplink. Rebuild with the fixed entrypoint; attaching another network alone is not a reliable workaround for an older image.
 
 ### Creating a Custom `Dockerfile`
 
@@ -112,9 +141,9 @@ So `latest` and major / major.minor tags always follow the newest stable RouterO
 
 ## Networking modes
 
-- **Two networks (recommended):** Attach the container to `default` and a shared network (e.g. `routeros_net`). The container gets eth0 and eth1. The entrypoint leaves **eth0** for host port mapping (QEMU user-mode networking with hostfwd), so SSH, telnet, API, Winbox from the host work. **eth1** is put in a bridge with the VM TAP; the guest gets an IP on the shared network via DHCP and can reach other containers (and the internet via Docker gateway). Use this when you need both host access and inter-container visibility.
+- **Two networks (recommended for direct guest networking):** Attach the container to an uplink network and a shared network. The entrypoint preserves the interface carrying the IPv4 default route for QEMU hostfwd, and bridges the other interface with the VM TAP. This works whether Docker assigns the uplink to eth0 or eth1. The guest gets an address on the bridged network via DHCP. Ensure that the intended shared network is the non-uplink network. Two-network mode requires an IPv4 default route on eth0 or eth1; if the entrypoint cannot identify it, it stops before changing either interface.
 
-- **Single network:** If the container has only one interface (eth0), it is put in the bridge and the VM gets the container IP via DHCP. Host port mapping then relies on the bridge forwarding to the VM; inter-container works. For reliable host access (SSH/telnet without hangs), prefer two networks.
+- **Single network:** The container keeps eth0 and its Docker-managed address. QEMU user-mode networking forwards the supported management ports into the guest, including HTTP (80) and HTTPS (443). No TAP bridge or container-side DHCP server is started. Other containers can reach forwarded services through the container address, but the guest does not have a direct layer-2 presence on the Docker network. Publishing additional ports alone does not add QEMU forwards; use the two-network TAP mode for direct guest networking.
 
 **Two or more RouterOS on the same Docker network:** each container needs a unique MAC. By default a unique MAC is generated per volume and stored in `ROUTEROS_DATA_DIR/nic_mac`; use different volumes per service so each gets its own MAC. To set a MAC explicitly, use `ROUTEROS_NIC_MAC` or write it to `nic_mac` in the data dir.
 
@@ -129,7 +158,10 @@ services:
     devices: ["/dev/net/tun", "/dev/kvm"]
     ports: ["2222:22", "2223:23", "8728:8728", "8729:8729"]
     volumes: ["./routeros_data:/data"]
-    networks: [default, routeros_net]
+    networks:
+      default:
+        gw_priority: 1
+      routeros_net: {}
 
   routeros2:
     image: evilfreelancer/docker-routeros:latest
@@ -138,7 +170,10 @@ services:
     devices: ["/dev/net/tun", "/dev/kvm"]
     ports: ["3222:22", "3223:23", "18728:8728", "18729:8729"]
     volumes: ["./routeros_data2:/data"]
-    networks: [default, routeros_net]
+    networks:
+      default:
+        gw_priority: 1
+      routeros_net: {}
     # Each volume gets its own MAC in nic_mac; no need to set ROUTEROS_NIC_MAC unless you want a fixed value.
 
 networks:
@@ -159,7 +194,10 @@ services:
     devices: ["/dev/net/tun", "/dev/kvm"]
     ports: ["2222:22", "2223:23", "8728:8728", "8729:8729"]
     volumes: ["./routeros_data:/data"]
-    networks: [default, network1]
+    networks:
+      default:
+        gw_priority: 1
+      network1: {}
 
   other-service:
     image: your-image
@@ -174,13 +212,13 @@ networks:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ROUTEROS_NIC_MAC` | (generated) | MAC of the guest NIC on the bridge (TAP). At start the value is read from `ROUTEROS_DATA_DIR/nic_mac` if the file exists; otherwise the env is used if set, else a unique MAC is generated and written to that file so it persists per volume. Set this env only to override the stored or generated value. |
-| `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest via DHCP. |
-| `ROUTEROS_ETH_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the bridge port (eth0 or eth1). Set to `0` to disable. |
+| `ROUTEROS_NIC_MAC` | (generated) | MAC of the guest TAP NIC in two-network mode. At start the value is read from `ROUTEROS_DATA_DIR/nic_mac` if the file exists; otherwise the env is used if set, else a unique MAC is generated and written to that file so it persists per volume. This does not configure the user-mode NIC in single-network mode. |
+| `ROUTEROS_DHCP_DNS` | `8.8.8.8 8.8.4.4` | Space-separated DNS servers passed to the guest through the TAP bridge's DHCP server in two-network mode. Unused in single-network mode, which uses QEMU's default DNS settings. |
+| `ROUTEROS_ETH_PROMISC` | `1` | Set to `1` to enable promiscuous mode on the non-uplink bridge port (eth0 or eth1 in two-network mode). Set to `0` to disable. Unused in single-network mode. |
 | `ROUTEROS_DATA_DIR` | `/data` | Directory used for persistent data: a second disk image file is stored here and the bridge NIC MAC is saved in `nic_mac`. Mount a Docker volume here so the second disk and MAC persist. See "Second disk (volume)" below. |
 | `ROUTEROS_DISK2_SIZE` | `256M` | Size of the second disk image when it is created automatically (e.g. `512M`, `1G`). Used only when `ROUTEROS_DATA_DIR/disk2.raw` does not exist yet. |
 
-Example with custom DNS and MAC:
+Two-network TAP example with custom DNS and MAC (attach two networks as shown above):
 
 ```yml
   routeros:
@@ -218,7 +256,10 @@ Example:
       - ./routeros_data:/data
     environment:
       ROUTEROS_DISK2_SIZE: "512M"   # optional; default 256M
-    networks: [default, routeros_net]
+    networks:
+      default:
+        gw_priority: 1
+      routeros_net: {}
 ```
 
 Here `./routeros_data` is mounted at `/data`. On first start, `routeros_data/disk2.raw` is created (512M in this example). In RouterOS, run `/disk format sata1 file-system=ext4 label=data` once; then the second disk is available in `/file` and persists across restarts.
@@ -235,6 +276,24 @@ catering to various services and protocols used by RouterOS.
 | OpenVPN     | 1194/tcp, 1194/udp                    |
 | L2TP        | 1701                                  |
 | PPTP        | 1723                                  |
+
+## Tests
+
+Run the entrypoint regression tests with Python 3 and Bash; they do not require Docker or third-party Python packages:
+
+```bash
+python3 -m unittest discover -s tests -v
+bash -n scripts/entrypoint.sh
+```
+
+To test WebFig against fresh RouterOS guests with one and two Docker networks, build the image and enable the Docker smoke tests:
+
+```bash
+docker build --build-arg ROUTEROS_VERSION=7.21.4 -t routeros-webfig-test .
+ROUTEROS_TEST_IMAGE=routeros-webfig-test python3 -m unittest discover -s tests -v
+```
+
+The smoke tests require a local Linux Docker daemon and `/dev/net/tun` for the two-network case. They use KVM on x86_64 when `/dev/kvm` exists, publish HTTP on random loopback ports, and remove their temporary containers and networks on completion. Each guest has a 300-second boot budget; set `ROUTEROS_TEST_TIMEOUT` to a positive number of seconds to adjust it for slower emulation. Without `ROUTEROS_TEST_IMAGE`, these two tests are skipped.
 
 ## Links
 

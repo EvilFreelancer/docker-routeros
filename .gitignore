@@ -3,3 +3,4 @@
 /root_test/
 /*.vdi
 /docker-compose.yml
+__pycache__/
